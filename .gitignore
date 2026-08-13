@@ -1,0 +1,15 @@
+# ===== 操作系统/编辑器垃圾文件 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+ehthumbs.db
+
+# ===== 机器本地的 WorkBuddy 设置（不跨机同步）=====
+.codebuddy/
+
+# ===== 依赖/缓存（如后续写脚本产生）=====
+node_modules/
+__pycache__/
+*.pyc
+
+# ===== 工作区记忆 .workbuddy/ 需要同步，勿加入忽略 =====
