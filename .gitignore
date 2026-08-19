@@ -14,3 +14,4 @@ __pycache__/
 
 # ===== 工作区记忆 .workbuddy/ 需要同步，勿加入忽略 =====
 debug.log
+deploy_cs/
