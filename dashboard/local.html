@@ -1818,8 +1818,8 @@ setAdminMode(false); // 默认锁定：隐藏 设置目标/固化/导出/导入/
     const res = rebuildFromWorkbook(wb);
     if(res){
       DASHBOARD_DATA.meta._stamp = new Date().toISOString();
-      DASHBOARD_DATA.meta.统计截止日 = '2026-08-17';
-      computeTime(new Date('2026-08-17T00:00:00'));
+      DASHBOARD_DATA.meta.统计截止日 = '2026-08-18';
+      computeTime(new Date('2026-08-18T00:00:00'));
       updateAsOfBadge();
       syncPeriodUI(); renderAll();
       console.log('[auto-sync] 已用最新 Excel 重建', res);
