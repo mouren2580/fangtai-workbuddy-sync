@@ -605,7 +605,7 @@ AS_OF_DATE = null;
 /* 默认数据截止日：优先读 DASHBOARD_DATA.meta.统计截止日（由 build 脚本 --date 写入），缺失时退回今天。
    口径：已完成天数 = 截止日 − 周期开始(上月28日) + 1，如 8.8 → 12 天、剩余 19 天。
    用户同步Excel或点「🕒时间设置」可再调整。 */
-const DEFAULT_ASOF = (function(){
+let DEFAULT_ASOF = (function(){
   const s=(DASHBOARD_DATA.meta&&DASHBOARD_DATA.meta.统计截止日)||'';
   const d=s?new Date(s+'T00:00:00'):null;
   return (d&&!isNaN(d.getTime()))?d:new Date();
@@ -1822,12 +1822,31 @@ setAdminMode(false); // 默认锁定：隐藏 设置目标/固化/导出/导入/
       const wb = XLSX.read(bytes, {type:"array"});
       const res = rebuildFromWorkbook(wb);
       if(res){
+        // 从内嵌 Excel「服务产品收入统计」表的「过账日期」列取最大值作为统计截止日
+        let maxDate = null;
+        try{
+          const wsDate = wb.Sheets['服务产品收入统计'];
+          if(wsDate){
+            const rowsDate = XLSX.utils.sheet_to_json(wsDate,{header:1,defval:null,blankrows:false});
+            let hdrIdxDate = -1;
+            for(let i=0;i<rowsDate.length;i++){ if(rowsDate[i] && String(rowsDate[i][0]||'').trim()==='过账日期'){ hdrIdxDate=i; break; } }
+            if(hdrIdxDate>=0){
+              for(let i=hdrIdxDate+1;i<rowsDate.length;i++){
+                const r=rowsDate[i]; if(!r || r[0]==null || r[0]==='') continue;
+                const d=new Date(r[0]);
+                if(!isNaN(d.getTime()) && (!maxDate || d>maxDate)) maxDate=d;
+              }
+            }
+          }
+        }catch(e){ console.error('[offline] 读取过账日期失败', e); }
+        const cutDate = maxDate ? isoDate(maxDate) : '2026-08-19';
         DASHBOARD_DATA.meta._stamp = new Date().toISOString();
-        DASHBOARD_DATA.meta.统计截止日 = "2026-08-18";
-        computeTime(new Date("2026-08-18T00:00:00"));
+        DASHBOARD_DATA.meta.统计截止日 = cutDate;
+        DEFAULT_ASOF = new Date(cutDate+'T00:00:00');
+        computeTime(DEFAULT_ASOF);
         updateAsOfBadge(); syncPeriodUI(); renderAll();
-        document.title = "方太西北服务看板（离线·数据更新 2026-08-19）";
-        console.log("[offline] 内嵌 Excel 已加载", res);
+        document.title = "方太西北服务看板（离线·数据更新 " + cutDate + "）";
+        console.log("[offline] 内嵌 Excel 已加载", res, "统计截止日", cutDate);
       } else { console.warn("[offline] rebuild 失败"); }
     }catch(e){ console.error("[offline] 失败", e); }
   }
