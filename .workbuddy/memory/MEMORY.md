@@ -7,6 +7,8 @@
 - **本机（家里）认证**：SSH 密钥 `~/.ssh/id_ed25519_gitee`，Gitee 公钥标题 `home-workbuddy`。
 - **单位电脑接入**：clone → 生成自有 SSH 密钥 → 加入同一 Gitee 账号 → 双向 pull/push。
 - **日常流程**：改后 `git add -A && git commit -m "..." && git push`；另一台先 `git pull`。
+- **本机推送的权限坑（2026-08-19 确认）**：`git push` 走 SSH 需读 `~/.ssh`，被**沙箱拦截**，必须加 `dangerouslyDisableSandbox:true` 且**用户需放行 bypass 弹窗**（用户曾连续拒绝导致推不出去）。另：本机 Git 凭据助手是 Sogou 的 `helper-selector`，在沙箱里写 `AppData\LocalLow\SogouPY` 会失败、且无 Gitee 凭据缓存，故 HTTPS 推送也不可用；`manager-core` 未安装。
+- **可靠推送方案**：(1) 用户放行 bypass 后 `git push origin main`；(2) 用户提供 Gitee PAT，用 `git push https://<user>:<token>@gitee.com/xbftsjkb/fangtai-workbuddy-sync.git main`（绕开 SSH 与 Sogou 助手）；(3) 用户手动在终端 `git push origin main`。
 
 ## 网页看板（fangtai-dashboard）机制
 - 地址：`https://mouren2580.github.io/fangtai-dashboard/?newPanel=true`，GitHub Pages 静态站，纯前端 SPA。
