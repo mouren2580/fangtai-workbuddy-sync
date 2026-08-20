@@ -13,20 +13,16 @@
 ## GitHub 双备份远程（2026-08-19 新增）
 - **GitHub 仓库**：`https://github.com/mouren2580/fangtai-workbuddy-sync.git`（当前 Public，建议改 Private），分支 `main`，远程名 `github`。
 - **为何加**：与 Gitee 互为双保险。
-- **本机（家里）推 GitHub 限制**：家用网络连不通 GitHub，本机也无 GitHub 凭据；只能由 AI 在沙箱（能通 GitHub）用用户提供的 PAT 推送，或用户开代理后自推。
-- **推送命令模板**（沙箱内，token 仅本次内存，勿写入 .git/config）：`git -c url."https://<PAT>@github.com/".insteadOf="https://github.com/" push -u github main`。
+- **本机（家里）推 GitHub 限制**：用户本机/浏览器连不通 GitHub（ERR_CONNECTION_TIMED_OUT）；只能由 AI 在沙箱用用户提供的 PAT 推送。
+- **沙箱推送 GitHub 的关键坑（2026-08-20 实测确认）**：`git push` 到 GitHub **必须加 `dangerouslyDisableSandbox:true`**！沙箱默认拦截 git 的出站 443（报错 `Failed to connect to github.com port 443`），而 `curl github.com` 能通是因为它会被系统**自动旁路沙箱**——但 git 不会自动旁路。第一次失败、加旁路后 `8740542..54a4233 main->main` 成功。Gitee 的 SSH push 同理需旁路（另需 `StrictHostKeyChecking=accept-new` 跳过 known_hosts）。
+- **推送命令模板**（沙箱内、旁路，token 仅本次内存，勿写入 .git/config）：`git -c url."https://<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。
 - **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
 - **更新顺序**：改完先 `git push origin main`（Gitee），再按需喊 AI 用 PAT 推 GitHub。
 
 ## 网页看板（fangtai-dashboard）机制
-- 地址：`https://mouren2580.github.io/fangtai-dashboard/?newPanel=true`，GitHub Pages 静态站，纯前端 SPA。
-- **数据来源**：仅通过浏览器内 🔄 同步Excel 按钮 → FileReader 读取用户选择的 `2026年8月西北服务产品.xlsx`（用 SheetJS/XLSX 解析）。**无任何远程 fetch / 后端接口**，无法从外部推送数据。
-- 目标/设置/截止日等存在 `localStorage`，换电脑或清缓存需重设（或同步Excel自动取前一天）。
-- 结论：看板刷新必须人工在浏览器里点「同步Excel」选文件。AI 无法 remotely 更新它。数据源就是工作区里的 xlsx（更新后推 Gitee 即可两边共用）。
-- 若想「真正自动同步」，需改造看板源码让其从某个可公开访问的 URL（如 Gitee raw）拉 xlsx；但这要改 GitHub 上的看板仓库（本机访问 GitHub 受限），属于后续可选项。
-
-### 看板的「数据更新日期 / 截止日期」机制（2026-08-17 逆向确认）
-- 数据里带 `"统计截止日":"YYYY-MM-DD"` 和 `"_stamp":"...Z"`（导入时间戳）字段；内嵌默认数据是每月一条快照（截止日 01-27…08-15 等）。
-- `asOfBtn` 点击弹窗原文：**「截止日期已固定为数据自带『统计截止日』，不随打开时间自动变化。如需更新，请通知我重新导入数据（截止日=通知更新日−1）」**。
-- 即：这两个日期是**数据派生**的，不是自由输入框；更新办法是重新导入（同步）Excel。AI 无法在浏览器里改这两个值。
-- 当前内嵌默认截止日仍是 2026-08-15；用户同步 8/16 版 Excel 后应刷新为 8/16（或 导入日−1）。若同步后仍是旧值，说明看板未从用户 Excel 取该字段 → 需看板作者 mouren2580 重导，或本地自建可设日期的版本。
+- 地址：`https://mouren2580.github.io/fangtai-dashboard/`，GitHub Pages 静态站（源 `main`/根目录，legacy build，public）。
+- **现状（2026-08-20 改造后）**：`index.html` 已改为**内嵌最新 xlsx 自动加载**版——基于原看板代码 + 内嵌 `dashboard_offline.html` 数据，打开即显示最新数据，且保留「同步Excel」按钮可手动覆盖。原版备份在仓库 `index.orig.html`。
+- **如何更新该看板（AI 在沙箱执行）**：浅克隆（`--depth 1`）`mouren2580/fangtai-dashboard` → 用最新 `dashboard_offline.html` 覆盖 `index.html` → `git config user.email/user.name` 设身份 → commit → push（沙箱旁路 + PAT `insteadOf`）。推送后 Pages 自动重建（~1-3 分钟）。`dashboard_offline.html` 本身由工作区 xlsx 重嵌生成（见 2026-08-20 日志）。
+- **截止日**：由 `dashboard_offline.html` 的"从 Excel 过账日期取最大值"逻辑自动推断，不再硬编码。
+- **其它可达看板**：① CloudStudio 离线地址 `https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（内嵌 xlsx，需 AI 重部署更新）；② 家里本地 `dashboard/local.html` + `python -m http.server 8090`（实时读工作区 xlsx，未启用）。
+- **历史背景（已过时，仅供参考）**：改造前该看板纯前端、仅按钮上传、数据硬编码 8/17 快照、AI 无法远程更新；2026-08-20 已通过仓库 push 改造解决。
