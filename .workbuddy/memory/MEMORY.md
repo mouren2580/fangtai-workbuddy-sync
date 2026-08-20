@@ -18,11 +18,15 @@
 - **推送命令模板**（沙箱内、旁路，token 仅本次内存，勿写入 .git/config）：`git -c url."https://<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。
 - **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
 - **更新顺序**：改完先 `git push origin main`（Gitee），再按需喊 AI 用 PAT 推 GitHub。
+- **PAT 安全策略（2026-08-20 用户决定）**：当前用的是 **classic PAT**（`ghp_...Lp1`，scope=`repo`=全仓库读写，过度授权，过期 2026-09-18）。用户要求"撤销并替换成受限 PAT"。
+  - ⚠️ **AI 能力边界**：① 创建 fine-grained PAT 必须由用户在 GitHub 网页生成，AI 不能代建（需用户登录凭证）；② 撤销 classic PAT 无法通过 API 自删（`DELETE /authorizations` 需 basic auth 用户名+密码，bearer token 不行），须用户在网页 Settings→Developer settings→PAT 手动撤销。
+  - **受限 PAT 规格（替换目标）**：Fine-grained PAT，Resource owner=`mouren2580`，Repository access=仅 `fangtai-dashboard` + `fangtai-workbuddy-sync`，Permissions→Repository→Contents=Read and write，设合理过期（如 1 年）。
+  - **切换顺序（避免推送中断）**：用户先建新 fine-grained PAT 并发给 AI → AI 改 insteadOf 里的 token 并验证 push → 用户再网页撤销旧 classic PAT。当前旧 PAT 仍保留使用中。
 
 ## 网页看板（fangtai-dashboard）机制
 - 地址：`https://mouren2580.github.io/fangtai-dashboard/`，GitHub Pages 静态站（源 `main`/根目录，legacy build，public）。
 - **现状（2026-08-20 改造后）**：`index.html` 已改为**内嵌最新 xlsx 自动加载**版——基于原看板代码 + 内嵌 `dashboard_offline.html` 数据，打开即显示最新数据，且保留「同步Excel」按钮可手动覆盖。原版备份在仓库 `index.orig.html`。
 - **如何更新该看板（AI 在沙箱执行）**：浅克隆（`--depth 1`）`mouren2580/fangtai-dashboard` → 用最新 `dashboard_offline.html` 覆盖 `index.html` → `git config user.email/user.name` 设身份 → commit → push（沙箱旁路 + PAT `insteadOf`）。推送后 Pages 自动重建（~1-3 分钟）。`dashboard_offline.html` 本身由工作区 xlsx 重嵌生成（见 2026-08-20 日志）。
-- **截止日**：由 `dashboard_offline.html` 的"从 Excel 过账日期取最大值"逻辑自动推断，不再硬编码。
+- **截止日口径**：由 `dashboard_offline.html` 的 `deriveCutoffFromWorkbook()` 扫**全工作簿所有「日期/时间」列取最大值**（封顶今天）自动推断，不再硬编码。注意：**数据截止日 = 业务数据最大日期（如 8-19）≠ 文件更新/修改日期（如 8-20）**。
 - **其它可达看板**：① CloudStudio 离线地址 `https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（内嵌 xlsx，需 AI 重部署更新）；② 家里本地 `dashboard/local.html` + `python -m http.server 8090`（实时读工作区 xlsx，未启用）。
 - **历史背景（已过时，仅供参考）**：改造前该看板纯前端、仅按钮上传、数据硬编码 8/17 快照、AI 无法远程更新；2026-08-20 已通过仓库 push 改造解决。
