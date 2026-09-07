@@ -15,7 +15,7 @@
 - **为何加**：与 Gitee 互为双保险。
 - **本机（家里）推 GitHub 限制**：用户本机/浏览器连不通 GitHub（ERR_CONNECTION_TIMED_OUT）；只能由 AI 在沙箱用用户提供的 PAT 推送。
 - **沙箱推送 GitHub 的关键坑（2026-08-20 实测确认）**：`git push` 到 GitHub **必须加 `dangerouslyDisableSandbox:true`**！沙箱默认拦截 git 的出站 443（报错 `Failed to connect to github.com port 443`），而 `curl github.com` 能通是因为它会被系统**自动旁路沙箱**——但 git 不会自动旁路。第一次失败、加旁路后 `8740542..54a4233 main->main` 成功。Gitee 的 SSH push 同理需旁路（另需 `StrictHostKeyChecking=accept-new` 跳过 known_hosts）。
-- **推送命令模板**（沙箱内、旁路，token 仅本次内存，勿写入 .git/config）：`git -c url."https://<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。
+- **推送命令模板（2026-09-01 修正）**：`git -c url."https://x-access-token:<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。⚠️ **旧模板 `https://<PAT>@github.com/` 的坑**：它只把 PAT 放在**用户名位**、密码位为空，依赖 Windows 凭据缓存；缓存一旦失效（或新克隆的仓库无缓存）就会弹窗要密码并失败。必须用 `x-access-token:<PAT>`（或 `<PAT>:<PAT>`）把 PAT 明确放在**密码位**，才能稳定免交互推送。克隆独立仓库（如 fangtai-dashboard）后也可用 `git remote set-url origin https://x-access-token:<PAT>@github.com/...` 直接写死。
 - **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
 - **更新顺序**：改完先 `git push origin main`（Gitee），再按需喊 AI 用 PAT 推 GitHub。
 - **PAT 安全策略（2026-08-20 用户决定）**：当前用的是 **classic PAT**（`ghp_...Lp1`，scope=`repo`=全仓库读写，过度授权，过期 2026-09-18）。用户要求"撤销并替换成受限 PAT"。
