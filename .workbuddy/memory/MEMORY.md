@@ -17,10 +17,13 @@
 ## GitHub 双备份远程（2026-08-19 新增）
 - **GitHub 仓库**：`https://github.com/mouren2580/fangtai-workbuddy-sync.git`（当前 Public，建议改 Private），分支 `main`，远程名 `github`。
 - **为何加**：与 Gitee 互为双保险。
-- **本机（家里）推 GitHub 限制**：用户本机/浏览器连不通 GitHub（ERR_CONNECTION_TIMED_OUT）；只能由 AI 在沙箱用用户提供的 PAT 推送。
-- **沙箱推送 GitHub 的关键坑（2026-08-20 实测确认）**：`git push` 到 GitHub **必须加 `dangerouslyDisableSandbox:true`**！沙箱默认拦截 git 的出站 443（报错 `Failed to connect to github.com port 443`），而 `curl github.com` 能通是因为它会被系统**自动旁路沙箱**——但 git 不会自动旁路。第一次失败、加旁路后 `8740542..54a4233 main->main` 成功。Gitee 的 SSH push 同理需旁路（另需 `StrictHostKeyChecking=accept-new` 跳过 known_hosts）。
-- **推送命令模板（2026-09-01 修正）**：`git -c url."https://x-access-token:<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。⚠️ **旧模板 `https://<PAT>@github.com/` 的坑**：它只把 PAT 放在**用户名位**、密码位为空，依赖 Windows 凭据缓存；缓存一旦失效（或新克隆的仓库无缓存）就会弹窗要密码并失败。必须用 `x-access-token:<PAT>`（或 `<PAT>:<PAT>`）把 PAT 明确放在**密码位**，才能稳定免交互推送。克隆独立仓库（如 fangtai-dashboard）后也可用 `git remote set-url origin https://x-access-token:<PAT>@github.com/...` 直接写死。
-- **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
+- **本机（家里）推 GitHub**：用户本机/浏览器直连 GitHub 会超时，**只能由 AI 在（非沙箱）环境用 SSH 推**；走 SSH 后不需要 PAT。
+- **推送到 GitHub 必须 `dangerouslyDisableSandbox: true`**（SSH 要读 `~/.ssh`，沙箱会拦；HTTPS 443 也曾被拦）。
+- **✅ 推送方式＝SSH（2026-09-15 起，已弃用 PAT 模板）**：`github` 远程已改为 `git@github.com:mouren2580/fangtai-workbuddy-sync.git`，直接 **`git push github main`** 即可。对应的 `~/.ssh/config` 已配 `Host github.com → IdentityFile ~/.ssh/id_ed25519_github`；首次需 `StrictHostKeyChecking=accept-new`。
+  - 历史遗留（仅供理解，勿再用）：旧方案是 `git -c url."https://x-access-token:<PAT>@github.com/".insteadOf="https://github.com/" push github main`，依赖 PAT；PAT 已失效。
+  - **2026-09-15 状态：GitHub 备份仓已补齐至 `cb2d99e`（与 Gitee `origin/main` 同步）✅**，不再落后。
+  - ⚠️ 该仓**仍是 Public**，内含方太业务数据/Excel/看板 —— 建议用户在 GitHub 网页改成 Private（AI 无权限代改）。
+- **SSH 公钥（2026-09-15 确认已注册并可用）**：`~/.ssh/id_ed25519_github`，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。实测 `ssh -T git@github.com` → `Hi mouren2580! You've successfully authenticated`。**同一把钥匙同时用于 `fangtai-dashboard`（Pages 仓）与 `fangtai-workbuddy-sync`（备份仓）**。
 - **更新顺序**：改完先 `git push origin main`（Gitee 备份仓），再 `python push_gh_pages.py` 推 GitHub Pages（SSH，见下文）。
 - **✅ PAT 已弃用，改走 SSH（2026-09-15 结论，别再折腾 PAT 了）**：classic PAT `ghp_...Lp1` 在 9-11、9-15 两度实测 `401 Bad credentials`（已失效/被撤销）。**但不需要新 PAT**——`~/.ssh/id_ed25519_github` 早已注册到 `mouren2580` 账号，`ssh -T git@github.com` 能通过认证，**直接 SSH 推 GitHub Pages 即可**（详见「GitHub Pages 改走 SSH 推送」条目）。
   - 本机**没有任何 GitHub 凭据**：无环境变量、无 `.git-credentials`、Windows 凭据管理器也无 GitHub 条目、git credential.helper = `<no helper>` → 一旦 SSH 也不可用，就只剩"用户自己推"一条路。
