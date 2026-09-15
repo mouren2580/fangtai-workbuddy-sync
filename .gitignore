@@ -28,3 +28,7 @@ _syntax_check.js
 _probe_*.py
 _check_*.py
 _diff_*.py
+_cmp_*.py
+_test_*.py
+_gh_live.html
+_inspect_out.txt

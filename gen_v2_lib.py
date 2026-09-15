@@ -86,8 +86,9 @@ PJ_NAME, PJ_CODE, PJ_CLASS, PJ_QTY, PJ_AMT, PJ_DATE = 12, 13, 17, 18, 27, 36
 # CSM服务项目列
 SP_OFFICE, SP_NET, SP_TECH, SP_TCODE = 1, 3, 5, 6
 SP_DATE, SP_ITEM, SP_CLASS, SP_AMT = 7, 13, 16, 24
-# 工单自购配件明细列
-ZG_OFFICE, ZG_NET, ZG_TECH, ZG_TCODE = 15, 5, 17, 28
+# 工单自购配件明细列（注意：本表无「办事处」列，15列是「大区部」，
+# 办事处需由 技师编号/服务网点 反查 CSM配件 或 工单表 得到）
+ZG_ALGO, ZG_NET, ZG_TECH, ZG_TCODE = 15, 5, 17, 28
 ZG_NAME, ZG_CODE, ZG_QTY, ZG_DATE = 13, 23, 19, 10
 
 
@@ -326,6 +327,7 @@ def build_valueparts(excel, cutoff, svc=None):
     for n, codes, pns in VA_PRODUCTS:
         prod[n] = {"special": False, "code": codes, "pname": pns, "buckets": {}, "eng": {}}
     prod["止回阀"] = {"special": True, "code": [], "pname": ["止回阀"], "buckets": {}, "eng": {}}
+    enc_pn = OrderedDict()
 
     def add(name, engkey, office, d, q):
         p = prod[name]
@@ -336,6 +338,22 @@ def build_valueparts(excel, cutoff, svc=None):
             if a <= d <= z:
                 b[key] += q
                 e[key] += q
+
+    # 技师/网点 → 办事处 反查表（自购配件表自身没有办事处列）
+    tech_office, net_office = {}, {}
+    for r in _rows(wb["CSM配件"], 2):
+        if not r or len(r) <= PJ_DATE:
+            continue
+        off = _s(r[PJ_OFFICE])
+        if not off:
+            continue
+        code, tech, net = _s(r[PJ_TCODE]), _s(r[PJ_TECH]), _s(r[PJ_NET])
+        if code:
+            tech_office.setdefault(code, off)
+        if tech:
+            tech_office.setdefault("·" + tech, off)
+        if net:
+            net_office.setdefault(net, off)
 
     # CSM配件
     ws = wb["CSM配件"]
@@ -353,7 +371,10 @@ def build_valueparts(excel, cutoff, svc=None):
                 continue
             add("止回阀", tk, off, d, _num(r[PJ_QTY]))
             continue
-        nm = code2name.get(_s(r[PJ_CODE])) or pname2name.get(_s(r[PJ_NAME]))
+        pn_raw = _s(r[PJ_NAME])
+        if pn_raw in pname2name:
+            enc_pn.setdefault(pn_raw, None)      # 配件名首次出现顺序
+        nm = code2name.get(_s(r[PJ_CODE])) or pname2name.get(pn_raw)
         if nm:
             add(nm, tk, off, d, _num(r[PJ_QTY]))
 
@@ -365,11 +386,21 @@ def build_valueparts(excel, cutoff, svc=None):
         d = _date(r[ZG_DATE])
         if d is None or d > cutoff or d < svc:
             continue
-        off, net, tech, code = _s(r[ZG_OFFICE]), _s(r[ZG_NET]), _s(r[ZG_TECH]), _s(r[ZG_TCODE])
+        net, tech, code = _s(r[ZG_NET]), _s(r[ZG_TECH]), _s(r[ZG_TCODE])
+        off = (tech_office.get(code) or tech_office.get("·" + tech)
+               or net_office.get(net) or "")      # 反查办事处，勿用本表「大区部」列
         tk = "%s（%s）" % (tech, code) if code else tech
-        nm = code2name.get(_s(r[ZG_CODE])) or pname2name.get(_s(r[ZG_NAME]))
+        pn_raw = _s(r[ZG_NAME])
+        if pn_raw in pname2name:
+            enc_pn.setdefault(pn_raw, None)
+        nm = code2name.get(_s(r[ZG_CODE])) or pname2name.get(pn_raw)
         if nm:
             add(nm, tk, off, d, _num(r[ZG_QTY]))
+
+    def _ord_pns(pns):
+        """配件名清单按源表首次出现顺序排列（与参考看板一致）"""
+        idx = {p: i for i, p in enumerate(enc_pn)}
+        return sorted(pns, key=lambda x: idx.get(x, len(enc_pn) + 1))
 
     products, checks = [], []
     for name, _, pns in VA_PRODUCTS:
@@ -385,11 +416,11 @@ def build_valueparts(excel, cutoff, svc=None):
         for b in p["buckets"].values():
             for k in tot:
                 tot[k] += b[k]
-        products.append({"name": name, "special": False, "pname": pns, "code": p["code"],
+        products.append({"name": name, "special": False, "pname": _ord_pns(pns), "code": p["code"],
                          "qty_yest": tot["yest"], "qty_last3": tot["last3"],
                          "qty_last7": tot["last7"], "qty_month": tot["month"],
                          "engineers": agents})
-        checks.append({"name": name, "code": p["code"], "pname": pns,
+        checks.append({"name": name, "code": p["code"], "pname": _ord_pns(pns),
                        "found": tot["month"] > 0,
                        "note": "" if tot["month"] > 0 else "已确认本月无销售（CSM配件表/工单自购配件明细 均无匹配记录），计为 0"})
     p = prod["止回阀"]
@@ -435,6 +466,7 @@ def build_bigcare4(excel, cutoff, use_cutoff):
     e_clean, e_excl, e_big = Counter(), Counter(), Counter()
     e_meta, n_office = {}, {}
     t_clean = t_excl = t_big = 0
+    enc = OrderedDict()            # 剔除项/大保养项：按源表首次出现顺序（与参考看板一致）
     for r in _rows(ws, 2):
         if not r or len(r) <= SP_AMT:
             continue
@@ -447,6 +479,8 @@ def build_bigcare4(excel, cutoff, use_cutoff):
         off, net = _s(r[SP_OFFICE]), _s(r[SP_NET])
         tech, code = _s(r[SP_TECH]), _s(r[SP_TCODE])
         item = _s(r[SP_ITEM])
+        if item in EXCLUDE or item in BIG:
+            enc.setdefault(item, None)
         ek = (tech, code)
         o_clean[off] += 1; n_clean[net] += 1; e_clean[ek] += 1; t_clean += 1
         if net and off:
@@ -490,6 +524,8 @@ def build_bigcare4(excel, cutoff, use_cutoff):
     ea.append({"name": "[合计]全部工程师", "id": "—", "office": "—", "net": "—",
                "big": t_big, "den": td, "pct": gp})
 
+    excl_o = [x for x in enc if x in EXCLUDE] + [x for x in EXCLUDE if x not in enc]
+    big_o = [x for x in enc if x in BIG] + [x for x in BIG if x not in enc]
     end = svc_start(cutoff.month, cutoff.year) + datetime.timedelta(days=30)
     meta = {"截止日": (cutoff if use_cutoff else end).strftime("%Y-%m-%d"),
             "来源表": "CSM服务项目",
@@ -497,7 +533,10 @@ def build_bigcare4(excel, cutoff, use_cutoff):
             "清洗保养总单": t_clean, "剔除项": list(EXCLUDE), "大保养项": list(BIG),
             "分母": td, "大保养总数": t_big,
             "全区占比": round(t_big / td * 100, 2) if td else 0.0}
-    return {"meta": meta, "office": oa, "net": na, "eng": ea}, t_clean, t_excl, t_big
+    # 口径差异：MDATA_*_B 用常量序，MONTHLY_FOUR.bigcare 用「源表首次出现序」
+    enc_lists = {"剔除项": excl_o, "大保养项": big_o}
+    return ({"meta": meta, "office": oa, "net": na, "eng": ea, "enc": enc_lists},
+            t_clean, t_excl, t_big)
 
 
 # ================= 5. 延保明细（EXTEND_TIME_DATA）=================
