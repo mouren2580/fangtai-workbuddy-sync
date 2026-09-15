@@ -21,9 +21,12 @@ agent_created: true
 # 修复步骤
 1. 修改 `deriveCutoffFromWorkbook()`：遇到非 Date 值直接 `continue`。
 2. 用 `reembed_xlsx.py` 把最新 xlsx 重嵌进 `dashboard_offline.html` 和 `deploy_cs/index.html`（如 xlsx 未变则 base64 不变）。
-3. 部署 CloudStudio：`workbuddy_cloudstudio_deploy(D:\WorkBuddy\deploy_cs)`。
-4. 推送 GitHub Pages：`fangtai-dashboard` 仓库用最新 `dashboard_offline.html` 覆盖 `index.html` 后 push（沙箱旁路 + PAT）。
-5. 本地 commit 修改到 `D:\WorkBuddy`，并视网络情况 push 到 `fangtai-workbuddy-sync` 备份仓。
+3. 发布与同步：**统一按下述 skill 的四端 SOP 执行**（2026-09-15 已更新，勿再用旧的 `workbuddy_cloudstudio_deploy` 或 PAT 推 Pages）：
+   → `D:\WorkBuddy\.workbuddy\skills\fangtai-dashboard-publish\SKILL.md`
+   - GitHub Pages：`python push_gh_pages.py`（SSH，需沙箱旁路）
+   - CloudStudio：`workbuddy_sites_deploy(directory="D:\WorkBuddy\deploy_cs")`（需用户当轮确认；报「预留域名未绑定」是假失败）
+   - 备份仓：`git push origin main`（Gitee）+ `git push github main`（均需沙箱旁路）
+   - 注意 `dashboard_offline.html` 的改动要同步到 `dashboard.html` 与 `dashboard_ref.html`（底板）
 
 # 验证
 - CloudStudio 地址：https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link
