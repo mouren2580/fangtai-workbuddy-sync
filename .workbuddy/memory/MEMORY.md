@@ -21,12 +21,10 @@
 - **沙箱推送 GitHub 的关键坑（2026-08-20 实测确认）**：`git push` 到 GitHub **必须加 `dangerouslyDisableSandbox:true`**！沙箱默认拦截 git 的出站 443（报错 `Failed to connect to github.com port 443`），而 `curl github.com` 能通是因为它会被系统**自动旁路沙箱**——但 git 不会自动旁路。第一次失败、加旁路后 `8740542..54a4233 main->main` 成功。Gitee 的 SSH push 同理需旁路（另需 `StrictHostKeyChecking=accept-new` 跳过 known_hosts）。
 - **推送命令模板（2026-09-01 修正）**：`git -c url."https://x-access-token:<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。⚠️ **旧模板 `https://<PAT>@github.com/` 的坑**：它只把 PAT 放在**用户名位**、密码位为空，依赖 Windows 凭据缓存；缓存一旦失效（或新克隆的仓库无缓存）就会弹窗要密码并失败。必须用 `x-access-token:<PAT>`（或 `<PAT>:<PAT>`）把 PAT 明确放在**密码位**，才能稳定免交互推送。克隆独立仓库（如 fangtai-dashboard）后也可用 `git remote set-url origin https://x-access-token:<PAT>@github.com/...` 直接写死。
 - **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
-- **更新顺序**：改完先 `git push origin main`（Gitee），再按需喊 AI 用 PAT 推 GitHub。
-- **PAT 安全策略（2026-08-20 用户决定）**：原用 **classic PAT**（`ghp_...Lp1`，scope=`repo`）。用户曾要求"撤销并替换成受限 PAT"后说"先不动了"。
-  - ⚠️ **2026-09-11 及 09-15 两次实测：该 classic PAT 已失效**——调 GitHub API 返回 `401 Bad credentials`。AI 当前**无法推送 GitHub Pages**；该站现由用户自己 BUILD + push。需用户提供新的有效 PAT 才能恢复 AI 代推。
-  - ⚠️ **AI 能力边界**：① 创建 fine-grained PAT 必须由用户在 GitHub 网页生成，AI 不能代建；② 撤销 classic PAT 需用户在网页手动撤销。
-  - **推荐替换**：Fine-grained PAT，Resource owner=`mouren2580`，Repository access=仅 `fangtai-dashboard`（Pages 站）+ 可选 `fangtai-workbuddy-sync`，Contents=Read and write，合理过期。
-  - **切换顺序**：用户提供新 PAT → AI 改 `_gh_push.py`/insteadOf 里的 token 并验证 push → 用户再网页撤销旧 PAT。
+- **更新顺序**：改完先 `git push origin main`（Gitee 备份仓），再 `python push_gh_pages.py` 推 GitHub Pages（SSH，见下文）。
+- **✅ PAT 已弃用，改走 SSH（2026-09-15 结论，别再折腾 PAT 了）**：classic PAT `ghp_...Lp1` 在 9-11、9-15 两度实测 `401 Bad credentials`（已失效/被撤销）。**但不需要新 PAT**——`~/.ssh/id_ed25519_github` 早已注册到 `mouren2580` 账号，`ssh -T git@github.com` 能通过认证，**直接 SSH 推 GitHub Pages 即可**（详见「GitHub Pages 改走 SSH 推送」条目）。
+  - 本机**没有任何 GitHub 凭据**：无环境变量、无 `.git-credentials`、Windows 凭据管理器也无 GitHub 条目、git credential.helper = `<no helper>` → 一旦 SSH 也不可用，就只剩"用户自己推"一条路。
+  - 若哪天还想回到 PAT：用户须**在 GitHub 网页自行创建**（AI 不能代建），建议 fine-grained、Resource owner=`mouren2580`、仅授权 `fangtai-dashboard`、Contents=Read and write、设合理过期；填给 `_gh_push.py` 或写进 `~/.workbuddy/.github_pat`。
 
 ## 网页看板（fangtai-dashboard）机制
 - **多月份架构（2026-09 起）**：`dashboard_offline.html` 用 `MONTH_DATA` 对象按月份键（`2026-01`…`2026-09`）存各月数据，每块 = `MDATA_YYYY_MM_{D,T,B,W,E}`（`D`主数据/`T`工程师/`B`大保养/`W`周数据/`E`延保）；`BASE_MONTH="2026-08"` 锚点不被重建覆盖；`CURRENT_MONTH` 默认 `2026-09`。页面 `fetch('version.json')` 做缓存穿透（BUILD 标记比对）。
@@ -51,9 +49,15 @@
 - **如何更新看板（AI 流程）**：① 把新 Excel 路径写进 `build_month.py` 的 `EXCEL` 常量（`gen_v2_lib.py` 无路径常量，由入口传入）→ 先 `check <参考版截止日>` 确认无异常 → 再 `build <更新日−1>`；② 复制 `dashboard_offline.html`+`version.json` 到 `deploy_cs/` → 用 `workbuddy_sites_deploy`（旧名 `workbuddy_cloudstudio_deploy`）部署；③ `git push origin main`（Gitee，沙箱旁路）；④ 另存一份 `dashboard.html` 供单位离线使用。
 - **⚠️ 线上部署需用户当轮确认**：`workbuddy_sites_deploy` 对方「已有线上链接的目录」会拒绝静默覆盖，返回 `sites_deploy_needs_confirmation`，会要求先问用户一句「改动已完成，需要我同步更新到线上分享链接吗？（线上现有内容会被覆盖）」——**这是工具强约束，即使工作区既有「自动部署」约定也必须先问**。
 - **截止日口径（铁律）**：`截止日 = 更新日前一天`。如 9-11 更新 → 锁 **2026-09-10**；9-15 更新 → 锁 **2026-09-14**；服务周期 = 上月28日→当月27日（9月=8.28–9.27，31天，时间进度=已过天数÷31）。
-- **最新状态（2026-09-15 09:04）**：工作区 BUILD `20260915-0904`，截止 `2026-09-14`。CloudStudio 已同步该版 ✅；GitHub Pages 仍为用户自推的 `20260914-0913`（截止 9-13）⚠️。D 合计 **¥306,777.34**（89 网点）/ 工单 **13,136**（工程师 212 人、工单消耗 ¥261,641.40）/ 防火阀占比 **19.02%**（止回阀 833 ÷ 烟机安装 4,379）/ 大保养 **2.67%**（12÷449，总单 459）/ 延保 **113 单 ¥42,974.90** / 清洗保养明细 448 条 / 增值产品 1,271 / 增值配件当月 1,774。三模块「止回阀」互校一致 = 833。
-- **三端版本现状（2026-09-15 实测）**：GitHub Pages `20260914-0913`（截止 9-13，**用户自己推的**）｜CloudStudio `20260911-1702`（截止 9-10，**落后，待部署**）｜工作区 `20260915-0904`（截止 9-14）。
-- **GitHub Pages 地址**：`https://mouren2580.github.io/fangtai-dashboard/`（源 `fangtai-dashboard` 仓 `main`/根目录）。**PAT（`ghp_...Lp1`）已于 9-11、9-15 两度实测 401 Bad credentials → AI 推不动**；目前该站由**用户自己 BUILD+push**（9-14 09:13 推了 `20260914-0913`）。要 AI 代推需用户给新的有效 fine-grained PAT（仅授权 `fangtai-dashboard`，Contents=RW）。
+- **最新状态（2026-09-15 09:20）**：工作区 BUILD `20260915-0904`，截止 `2026-09-14`。**三端已全部同步 ✅**。D 合计 **¥306,777.34**（89 网点）/ 工单 **13,136**（工程师 212 人、工单消耗 ¥261,641.40）/ 防火阀占比 **19.02%**（止回阀 833 ÷ 烟机安装 4,379）/ 大保养 **2.67%**（12÷449，总单 459）/ 延保 **113 单 ¥42,974.90** / 清洗保养明细 448 条 / 增值产品 1,271 / 增值配件当月 1,774。三模块「止回阀」互校一致 = 833。
+- **三端版本现状（2026-09-15 09:20 实测，全部一致 ✅）**：GitHub Pages `20260915-0904`（Pages 本体与本地**逐块一致 10/10**）｜CloudStudio `20260915-0904`｜工作区 `20260915-0904`，截止均 `2026-09-14`。
+- **🎉 GitHub Pages 改走 SSH 推送（2026-09-15 破解，彻底摆脱 PAT）**：地址 `https://mouren2580.github.io/fangtai-dashboard/`（源 `fangtai-dashboard` 仓 `main` / 根目录，用户**主要分享给同事看的就是这条**）。
+  - classic PAT `ghp_...Lp1` 已失效（API `401`），但 **`~/.ssh/id_ed25519_github` 早已注册到 mouren2580 账号**——`ssh -T git@github.com` 返回 `Hi mouren2580! You've successfully authenticated`。所以**用 SSH 直接推**，不再需要 PAT。
+  - **主用脚本 `push_gh_pages.py`**（工作区根）：维护常驻克隆 `~/.workbuddy/tmp/fangtai-dashboard`，`fetch + reset --hard` → 用 `deploy_cs/` 里的 `index.html`+`version.json` 覆盖 → commit → `git push origin main`；`--status` 只比对本地上线版本、不推送。
+  - ⚠️ **必须非沙箱运行**（要读 `~/.ssh`）；`~/.ssh/config` 已配 `Host github.com → IdentityFile ~/.ssh/id_ed25519_github`。
+  - ⚠️ 该仓除 `index.html` 外还有 `drainage/`、`sync-kit/`、`sync.sh`、`index.orig.html`、`.nojekyll`——**只覆盖 index.html 与 version.json，其它一律不碰**。
+  - GitHub Pages 重建约 **1–3 分钟**，用 `python push_gh_pages.py --status` 复核（线上 `version.json` 的 `v`/`cut`）。
+  - 备用：API 版脚本 `_gh_push.py`（需有效 PAT，目前不可用，已支持 `--check` 自检）。
 - **CloudStudio / 线上分享链接**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（目录 `D:\WorkBuddy\deploy_cs`）。**2026-09-15 09:09 已成功更新至 BUILD `20260915-0904`（截止 9-14）✅**，旧 `.link` 链接实测已生效。
 - **⚠️ 部署工具的「预留域名未绑定」报错＝假失败（2026-09-15 实测）**：`workbuddy_sites_deploy` 可能返回
   `应用预留域名 fangtai-dashboard.app.workbuddy.host 未绑定到本次发布环境，本次发布已停止。`
