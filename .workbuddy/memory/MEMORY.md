@@ -9,6 +9,10 @@
 - **日常流程**：改后 `git add -A && git commit -m "..." && git push`；另一台先 `git pull`。
 - **本机推送的权限坑（2026-08-19 确认）**：`git push` 走 SSH 需读 `~/.ssh`，被**沙箱拦截**，必须加 `dangerouslyDisableSandbox:true` 且**用户需放行 bypass 弹窗**（用户曾连续拒绝导致推不出去）。另：本机 Git 凭据助手是 Sogou 的 `helper-selector`，在沙箱里写 `AppData\LocalLow\SogouPY` 会失败、且无 Gitee 凭据缓存，故 HTTPS 推送也不可用；`manager-core` 未安装。
 - **可靠推送方案**：(1) 用户放行 bypass 后 `git push origin main`；(2) 用户提供 Gitee PAT，用 `git push https://<user>:<token>@gitee.com/xbftsjkb/fangtai-workbuddy-sync.git main`（绕开 SSH 与 Sogou 助手）；(3) 用户手动在终端 `git push origin main`。
+- ⚠️ **Gitee 单文件 100MB 硬限制（2026-09-15 实测踩坑）**：`git add -A` 曾误提交 `2026-09-12-20-12-51/models/faster-whisper-small/model.bin`（**462MB**，whisper 语音模型），Gitee 直接 `pre-receive hook declined / exceeds quota 100MB` 拒收整个 push。
+  - **教训**：本工作区做「全量 add」前务必确认没有大体积中间产物（模型、音视频、缓存）。
+  - **已加 `.gitignore`**：`2026-09-12-20-12-51/`、`models/`、`*.bin`、`_bak_*`、`_probe_*.py`、`_check_*.py`、`_diff_*.py`。
+  - **补救套路**：若大文件只出现在**最新一次未成功推送**的提交里 → `git rm -r --cached <path>` + `git commit --amend`，历史即不再含该 blob（不必 filter-branch）。若已推送过，才需要 `git filter-repo` 重写历史。
 
 ## GitHub 双备份远程（2026-08-19 新增）
 - **GitHub 仓库**：`https://github.com/mouren2580/fangtai-workbuddy-sync.git`（当前 Public，建议改 Private），分支 `main`，远程名 `github`。
@@ -26,14 +30,20 @@
 
 ## 网页看板（fangtai-dashboard）机制
 - **多月份架构（2026-09 起）**：`dashboard_offline.html` 用 `MONTH_DATA` 对象按月份键（`2026-01`…`2026-09`）存各月数据，每块 = `MDATA_YYYY_MM_{D,T,B,W,E}`（`D`主数据/`T`工程师/`B`大保养/`W`周数据/`E`延保）；`BASE_MONTH="2026-08"` 锚点不被重建覆盖；`CURRENT_MONTH` 默认 `2026-09`。页面 `fetch('version.json')` 做缓存穿透（BUILD 标记比对）。
-- **数据生成工具**：`build_dashboard.py`（原 `build()` 主数据+大保养生成器）**已丢失**（git/磁盘均无）。工作区现用 **`gen_month.py`**（自包含）重建某月五块并注入 HTML：
-  - 复用 `sync-kit/sync.py` 的 `build_tech`/`gen_extend`/`gen_weekly`（T/E/W）。
-  - `build_main`（D）：`服务产品收入统计` 按 (办事处,服务中心,服务网点) 聚合 15 品项+合计+来源，并补 `time` 字段（服务月进度）。
-  - `build_bigcare`（B）：`清洗保养总单`=**销售分类(col16)=清洗保养**；`剔除项`/`大保养项`=**服务收费项目(col13)**，与清洗保养总单**可重叠**（独立 if）；`分母=总单-剔除`。
-  - `gen_weekly` 周起点**向后**取服务月所在周周一（如 9 月从 8/24 起），脚手架整月 5 周，数据按截止日过滤。
-  - 顶部 `EXCEL` 路径需改成新 Excel；`CUTOFF`=更新日前一天（铁律）。运行：`python gen_month.py`（需 openpyxl，已装于 venv）。
-- **如何更新看板（AI 流程）**：① 改 `gen_month.py` 的 `EXCEL` 路径 → 跑它重建并注入 `dashboard_offline.html` + 写 `version.json`（BUILD 号）+ 改 `var BUILD`；② 复制 `dashboard_offline.html`+`version.json` 到 `deploy_cs/` → `workbuddy_cloudstudio_deploy`（同 URL）；③ `git push origin main`（Gitee，沙箱旁路）；④ GitHub Pages：`_gh_push.py`（需有效 PAT，读 `GITHUB_PAT` 环境变量）。
-- **截止日口径（铁律）**：`截止日 = 更新日前一天`。如 9-11 更新 → 锁 **2026-09-10**；服务周期 = 上月28日→当月27日（9月=8.28–9.27，31天）。
-- **GitHub Pages 地址**：`https://mouren2580.github.io/fangtai-dashboard/`（源 `fangtai-dashboard` 仓 `main`/根目录）。**2026-09-11 状态：仍停留在用户 9-11 BUILD（commit 41896a0e08，KPI 与本次一致），因 classic PAT 失效 AI 未能推送最新版。**
-- **CloudStudio 地址**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（2026-09-11 已部署最新版 ✅）。
+- **数据生成工具（2026-09-15 换代，务必用新工具）**：`build_dashboard.py` 与早期 `gen_month.py` 单跑法**已过时**。用户提供「单位版参考看板」`dashboard.html`（含更完整模块）后，改为**「以参考版为底板 + 只替换当月数据块」**：
+  - **入口 `build_month.py`**：
+    - `python build_month.py check 2026-09-12` → 用新 Excel 按某截止日重算，与参考版（其 BUILD/截止）**逐块对照**，用于验证解析器是否正确；`build` 模式才写文件。
+    - `python build_month.py build <截止日>` → 重建并注入 `dashboard_offline.html` + 写 `version.json` + 改 `var BUILD`。底板读自用户的参考 `dashboard.html`，**只替换 2026-09 分支**（1–8 月与 `MONTHLY_FOUR.year` 原样保留）。
+  - **解析库 `gen_v2_lib.py`**：`build_workorder / build_valueadded / build_valueparts / build_bigcare4 / build_extend_time / build_cleaning`。
+  - `gen_month.py` 保留，仅供 D（服务产品收入统计）/ T（工程师）/ W（周数据）复用。
+  - **✅ 验证结论（最重要口径）**：**所有模块都按「统计截止日 = 更新日 − 1」过滤**（不是「整服务月不过滤」）。已用新 Excel 按 9-12 重算，与参考版 BUILD `20260913-0918` 的全部数值**逐项吻合**（含 397/388/11/2.84%、104 条 ¥39,448.30、387 条等），证明解析器 100% 正确。
+- **模块清单（参考版逻辑）**：`MDATA_YYYY_MM_{D,T,B,W,E}` + `MONTHLY_FOUR.months[月].{workorder,valueadded,valueparts,bigcare}` + `EXTEND_TIME_DATA.months[月]`（延保明细）+ `CLEANING_DATA.months[月]`（清洗保养明细）。`MONTHLY_FOUR.year` = 1–8 月累计，**当月 Excel 只含本月，无法重算，保持原样**。
+- **`MDATA_2026_08_*` 不存在是正常的**：8 月用基准块 `DASHBOARD_DATA/TECH_DATA/BIG_CARE_DATA/WEEKLY_DATA/EXTEND_WARRANTY_DATA`。
+- **易踩的口径坑**：① 大保养 `net`/`eng` 同值排序用**首次出现顺序**（非名称），合计行固定文案 `[合计]全区`/`[合计]全部网点`/`[合计]全部工程师`；② meta 标签不统一：`workorder.meta.截止` 与 `MONTHLY_FOUR.bigcare.meta.截止日` = **服务月末（9-27）**，而 `MDATA_*_B.meta.截止日` = **截止日**且无「周期」字段；③ 延保 `EXTEND_TIME_DATA` 记录 `c` 恒为空串、E 块 `techs[].id` = **姓名**，E 必须由已过滤的延保明细聚合（`gen_extend` 不过滤日期，不能用）；④ `valueadded.products[]` **有** `verify`，`valueparts.products[]` **没有**；⑤ 明细表按源表行序，跨 Excel 文件排列不可复现，**只校验「多重集一致」**即可。
+- **如何更新看板（AI 流程）**：① 把新 Excel 路径写进 `build_month.py` 的 `EXCEL` 常量（`gen_v2_lib.py` 无路径常量，由入口传入）→ 先 `check <参考版截止日>` 确认无异常 → 再 `build <更新日−1>`；② 复制 `dashboard_offline.html`+`version.json` 到 `deploy_cs/` → 用 `workbuddy_sites_deploy`（旧名 `workbuddy_cloudstudio_deploy`）部署；③ `git push origin main`（Gitee，沙箱旁路）；④ 另存一份 `dashboard.html` 供单位离线使用。
+- **⚠️ 线上部署需用户当轮确认**：`workbuddy_sites_deploy` 对方「已有线上链接的目录」会拒绝静默覆盖，返回 `sites_deploy_needs_confirmation`，会要求先问用户一句「改动已完成，需要我同步更新到线上分享链接吗？（线上现有内容会被覆盖）」——**这是工具强约束，即使工作区既有「自动部署」约定也必须先问**。
+- **截止日口径（铁律）**：`截止日 = 更新日前一天`。如 9-11 更新 → 锁 **2026-09-10**；9-15 更新 → 锁 **2026-09-14**；服务周期 = 上月28日→当月27日（9月=8.28–9.27，31天，时间进度=已过天数÷31）。
+- **最新状态（2026-09-15）**：BUILD `20260915-0834`，截止 `2026-09-14`。D 合计 **¥306,777.34**（89 网点）/ 工单 **13,136** / 防火阀占比 **19.02%**（止回阀 833 ÷ 烟机安装 4,379）/ 大保养 **2.67%**（12÷449）/ 延保 **113 单 ¥42,974.90** / 清洗保养 448 条。三模块「止回阀」互校一致 = 833。
+- **GitHub Pages 地址**：`https://mouren2580.github.io/fangtai-dashboard/`（源 `fangtai-dashboard` 仓 `main`/根目录）。**2026-09-11 状态：仍停留在用户 9-11 BUILD（commit 41896a0e08），因 classic PAT 失效 AI 未能推送最新版。**
+- **CloudStudio / 线上分享链接**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（目录 `D:\WorkBuddy\deploy_cs`）。**2026-09-15：新版本已备好但未部署，等待用户当轮确认（工具强约束）。**
 - **历史背景（已过时，仅供参考）**：早期为内嵌 xlsx / 按钮上传机制，2026-08-20 改造、2026-09-11 用户改"在线版"硬编码 JS。
