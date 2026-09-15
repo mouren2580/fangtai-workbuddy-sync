@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>服务产品达成看板 · 计算说明</title>
+<style>
+  :root{
+    --ink:#1f2329; --sub:#646a73; --line:#e5e6eb; --bg:#f5f6f7; --card:#ffffff;
+    --brand:#c8102e; --brand-soft:#fdeef0; --blue:#2b6cb0; --blue-soft:#eaf2fb;
+    --green:#0f9d58; --green-soft:#e9f7ef; --amber:#b7791f; --amber-soft:#fdf6e3;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",Roboto,sans-serif;
+       line-height:1.75;font-size:15px;}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 22px 70px;}
+  header{border-bottom:3px solid var(--brand);padding-bottom:18px;margin-bottom:8px;}
+  h1{font-size:26px;margin:0 0 8px;letter-spacing:.5px;}
+  .meta{color:var(--sub);font-size:13px;}
+  .meta b{color:var(--brand);}
+  h2{font-size:19px;margin:38px 0 12px;padding-left:12px;border-left:5px solid var(--brand);}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--ink);}
+  p{margin:8px 0;}
+  ul{margin:8px 0 8px 4px;padding-left:20px;}
+  li{margin:5px 0;}
+  code{background:#eef0f3;padding:1px 6px;border-radius:4px;font-family:"SFMono-Regular",Consolas,monospace;
+       font-size:13px;color:#b02a37;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--card);}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#fafbfc;font-weight:600;color:var(--ink);white-space:nowrap;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0;}
+  .tip{border-left:4px solid var(--amber);background:var(--amber-soft);padding:10px 14px;border-radius:6px;margin:10px 0;font-size:14px;}
+  .brandbox{border-left:4px solid var(--brand);background:var(--brand-soft);padding:10px 14px;border-radius:6px;margin:10px 0;font-size:14px;}
+  .formula{background:var(--blue-soft);border-left:4px solid var(--blue);padding:10px 14px;border-radius:6px;
+           margin:10px 0;font-size:14.5px;}
+  .formula b{color:var(--blue);}
+  .ok{color:var(--green);font-weight:600;}
+  .num{font-family:Consolas,monospace;}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 20px;margin:20px 0;}
+  .toc a{color:var(--blue);text-decoration:none;margin-right:14px;line-height:2;}
+  .toc a:hover{text-decoration:underline;}
+  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>方太西北大区 · 服务产品达成看板 — 计算说明</h1>
+  <div class="meta">版本 BUILD <b>20260915-0834</b> ｜ 数据截止 <b>2026-09-14</b> ｜ 数据更新于 2026-09-15 ｜ 适用范围：西北大区 6 个办事处（新疆 / 宁夏 / 兰州 / 包头 / 呼和浩特 / 西宁）</div>
+</header>
+
+<div class="toc">
+  <a href="#s1">一、数据来源与字段</a>
+  <a href="#s2">二、周期口径</a>
+  <a href="#s3">三、目标口径</a>
+  <a href="#s4">四、各模块计算逻辑</a>
+  <a href="#s5">五、调平约定</a>
+  <a href="#s6">六、配色约定</a>
+  <a href="#s7">七、更新与同步</a>
+</div>
+
+<h2 id="s1">一、数据来源与字段</h2>
+<table>
+  <thead><tr><th>看板板块</th><th>数据表</th><th>关键字段（列）</th></tr></thead>
+  <tbody>
+    <tr><td>整体达成 / 三大爆品</td><td>服务产品收入统计</td><td>网点 × 品项 金额矩阵；按【数据来源】列的「合计」求和</td></tr>
+    <tr><td>工单 / 服务量、防火阀占比</td><td>工单明细表</td><td>办事处=L、服务网点=CB、服务工程师=BD、服务完成时间=AP、产品组=BV、工单类型=BN、服务项目=BF</td></tr>
+    <tr><td>增值产品 / 增值配件</td><td>CSM配件表 + 工单自购配件明细</td><td>销售分类=R、数量=S、上缴金额=AB、录入完成时间=AK（自购表：录入完成时间=K）</td></tr>
+    <tr><td>大保养占比 / 清洗保养 / 延保服务</td><td>CSM服务项目表</td><td>大区=A、办事处=B、服务网点=D、服务工程师=F、录入完成时间=H、服务收费项目=N、销售分类=Q、上缴金额=Y</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s2">二、周期口径</h2>
+<ul>
+  <li><b>服务月</b>：通用规则 = <b>上月 28 日 → 当月 27 日</b>。
+    <br>特例：1 月 = 25.12.28–26.1.27；2 月 = 26.1.28–2.25；3 月 = 2.26–3.27；4 月 = 3.28–4.27。
+    <br>当前 <b>9 月 = 2026.8.28 – 9.27（31 天）</b>。</li>
+  <li><b>服务年</b>：2025.12.28 – 2026.12.27。</li>
+  <li><b>统计截止日</b> = <b>更新日 − 1</b>（D−1 铁律）；若未通知更新，则冻结在上一次截止日、<b>不自动滚动</b>。</li>
+  <li><b>时间进度</b> = 已过天数 ÷ 服务月总天数。例：9/14 → 18 ÷ 31 = <span class="num">58.1%</span>。</li>
+</ul>
+
+<h2 id="s3">三、目标口径</h2>
+<ul>
+  <li><b>整体目标</b> = 15 个品项的目标合计。</li>
+  <li><b>三大爆品</b> = 清洗保养 + 延保服务 + 清洁耗材（三类<b>合并为 1 个数</b>）。</li>
+  <li><b>办事处年目标</b>（合计 ¥495 万）：新疆 187 / 宁夏 124 / 兰州 93 / 包头 39 / 呼和浩特 36 / 西宁 16（单位：万元）。</li>
+  <li>达成率 = 实际 ÷ 目标；<b>120% 目标 = 目标 × 1.2</b>。</li>
+</ul>
+
+<h2 id="s4">四、各模块计算逻辑</h2>
+
+<h3>1. 整体达成（办事处 · 网点明细）</h3>
+<div class="formula">实际合计 = 服务产品收入统计各网点 × 品项金额合计（按【数据来源】列「合计」求和）<br><b>达成率 = 实际合计 ÷ 整体目标</b></div>
+
+<h3>2. 三大爆品</h3>
+<div class="formula">实际 = 清洗保养 + 延保服务 + 清洁耗材 三项实际合计<br><b>达成率 = 实际 ÷ 三大爆品合并目标</b></div>
+
+<h3>3. 工单 / 服务量</h3>
+<ul>
+  <li>工单数 = 工单明细<b>行数</b>（服务完成时间落在服务月周期内）。</li>
+  <li>支持按 办事处 / 产品组 / 服务项目 / 工单类型 分组查看。</li>
+</ul>
+
+<h3>4. 防火阀（止回阀）占比</h3>
+<div class="formula">
+止回阀数量 = CSM配件表中「销售分类 = 止回阀」且「上缴金额 &gt; 0」的 <b>数量(S列)之和</b><br>
+　（仅统计服务月周期内工单对应的止回阀；金额为 0 / 空 / 非数字一律剔除）<br>
+烟机安装量 = 工单表中「产品组 = 吸油烟机」且「服务项目 ∈ {安装, 改装, 油烟机预埋烟管}」的工单量<br>
+<b>防火阀占比 = 止回阀数量 ÷ 烟机安装量 × 100%</b>
+</div>
+<div class="tip">⚠️ 易错点：止回阀是取 <b>数量列(S)求和</b>，不是行数计数。支持 办事处 / 网点 / 工程师 三维度查看。</div>
+<div class="brandbox">本次版本校验：止回阀数量在 <b>工单</b>（防火阀占比）、<b>增值产品</b>、<b>增值配件</b> 三个模块须完全一致（9 月 = <b>833</b>）。</div>
+
+<h3>5. 增值产品</h3>
+<ul>
+  <li>源：CSM配件表 + 工单自购配件明细。</li>
+  <li>日期过滤以 <b>「录入完成时间」</b> 为准（CSM配件 AK 列 / 自购 K 列）——注意与工单模块用「服务完成时间」不同。</li>
+  <li>各品项计数；其中 <b>止回阀</b> 走特殊口径（同上第 4 条）。</li>
+  <li>全区总计数 = 各品项计数之和。</li>
+</ul>
+
+<h3>6. 增值配件（时间窗口）</h3>
+<ul>
+  <li>窗口：<b>昨日 / 近 3 日 / 近 7 日 / 当月</b>（以统计截止日为基准回算）。</li>
+  <li>各品项计数 + 覆盖工程师数。</li>
+</ul>
+
+<h3>7. 大保养占比</h3>
+<div class="formula">
+分母 = 销售分类 = 清洗保养 的行数，<b>剔除</b>「保养超范围收费」「灶具保养」<br>
+分子 = 「油烟机大保养」+「油烟机大保养升级包」单数（只计单量，与金额无关）<br>
+<b>占比 = 分子 ÷ 分母</b>
+</div>
+
+<h3>8. 延保服务</h3>
+<ul>
+  <li>源：CSM服务项目表，销售分类 = 延保服务。</li>
+  <li>按「服务收费项目」拆年限：含"一年"→ <b>y1</b>、含"两年"→ <b>y2</b>、含"三年"→ <b>y3</b>。</li>
+  <li>按「录入完成时间」落在服务月周期内。</li>
+  <li>指标：<b>单数 + 上缴金额合计</b>；时间窗口：昨日 / 近 3 日 / 近 7 日（以统计截止日为 cut）。</li>
+</ul>
+
+<h3>9. 清洗保养</h3>
+<ul>
+  <li>源：CSM服务项目表，销售分类 = 清洗保养。<b>每行 = 1 单</b>；数量 = 行数；金额 = 上缴金额(Y列)。</li>
+  <li><b>免费单</b> = 上缴金额 = 0；<b>收费单</b> = 上缴金额 &gt; 0。</li>
+  <li>免费/收费统计<b>仅含主保养四项</b>：油烟机小保养、油烟机大保养、集成灶小保养、集成灶大保养（其余如"保养超范围收费""灶具保养"不计）。</li>
+  <li>维度：办事处 / 服务网点 / 服务工程师（各维度带合计行）。</li>
+  <li>主项选择器：全部 / 4 个单项（选单项时明细表只显示数量列）。</li>
+</ul>
+
+<h3>10. 下钻（办事处 → 网点）· 目标差值 KPI</h3>
+<div class="formula">
+距离 100% 差值 = 目标 × 1.0 − 实际<br>
+距离 110% 差值 = 目标 × 1.1 − 实际<br>
+完成 120% 差值 = 目标 × 1.2 − 实际<br>
+<b>剩余每天需完成 = 差值 ÷ 剩余天数</b>（剩余天数 = 服务月天数 − 已过天数）<br>
+<b>日均完成金额 = 实际 ÷ 已过天数</b>
+</div>
+<ul>
+  <li>当差值 ≤ 0 时显示「已达成」。</li>
+  <li>着色：按该档达成率（实际 ÷ 目标×档位）呈<b>「近绿远红」渐变</b>（越接近该档目标越绿，越远越红）；已达成固定为绿色。</li>
+</ul>
+
+<h3>11. 年度累计视图</h3>
+<ul>
+  <li>1–N 月各月数据合并展示；统计截止日取各月中的最大值。</li>
+  <li>年度目标进度按服务年（12.28–12.27）计算时间进度，与月度进度相互独立。</li>
+</ul>
+
+<h2 id="s5">五、调平约定</h2>
+<div class="brandbox">
+【数据来源】列中的「<b>网点买断</b>」与「<b>调整（虚拟网点 / 虚拟技师）</b>」<b>原样计入</b>——按「合计」列求和，表里写什么就显示什么，不做剔除。
+</div>
+
+<h2 id="s6">六、配色约定</h2>
+<ul>
+  <li><b>涨红跌绿</b>：红色 = 增长/达成，绿色 = 下降（中国习惯）。</li>
+  <li>目标差值卡：离目标越近越绿、越远越红（HSL 由红到绿渐变）。</li>
+</ul>
+
+<h2 id="s7">七、更新与同步</h2>
+<ul>
+  <li><b>统计截止日 = 更新日 − 1</b>，未通知更新则冻结、不自动滚动。</li>
+  <li>每次数据更新后版本号（BUILD）变化；用在线链接查看时需按 <code>Ctrl+Shift+R</code> 硬刷新。</li>
+  <li>离线使用：直接用新版 <code>dashboard.html</code> 覆盖旧文件即完成同步，无需联网。</li>
+</ul>
+
+<footer>
+  本说明用于对齐看板各指标的计算口径，随看板版本同步更新。<br>
+  当前版本数据：9 月（截止 2026-09-14）— 工单 13,136 / 防火阀占比 19.02%（止回阀 833 ÷ 烟机安装 4,379）/ 延保 113 单 ¥42,974.90 / 清洗保养 448 单 / 大保养占比 2.67%（12 ÷ 449）/ 整体实际合计 ¥306,777。
+</footer>
+
+</div>
+</body>
+</html>
