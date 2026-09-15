@@ -15,3 +15,16 @@ __pycache__/
 # ===== 工作区记忆 .workbuddy/ 需要同步，勿加入忽略 =====
 debug.log
 deploy_cs/
+
+# ===== 大体积临时产物 / 中间件（Gitee 单文件 100MB 限制）=====
+2026-09-12-20-12-51/
+models/
+*.bin
+
+# ===== 看板备份与一次性校验脚本（不入同步仓）=====
+_bak_*.html
+_bak_*.json
+_syntax_check.js
+_probe_*.py
+_check_*.py
+_diff_*.py

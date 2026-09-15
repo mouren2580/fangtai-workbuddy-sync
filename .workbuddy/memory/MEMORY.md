@@ -18,15 +18,22 @@
 - **推送命令模板（2026-09-01 修正）**：`git -c url."https://x-access-token:<PAT>@github.com/".insteadOf="https://github.com/" push github main`（前面加沙箱旁路参数）。⚠️ **旧模板 `https://<PAT>@github.com/` 的坑**：它只把 PAT 放在**用户名位**、密码位为空，依赖 Windows 凭据缓存；缓存一旦失效（或新克隆的仓库无缓存）就会弹窗要密码并失败。必须用 `x-access-token:<PAT>`（或 `<PAT>:<PAT>`）把 PAT 明确放在**密码位**，才能稳定免交互推送。克隆独立仓库（如 fangtai-dashboard）后也可用 `git remote set-url origin https://x-access-token:<PAT>@github.com/...` 直接写死。
 - **SSH 公钥备份**（未启用，因改用 PAT）：`~/.ssh/id_ed25519_github` 已生成，公钥 `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKZzj9JlxinRnj3dOlYstcG4FqIUFCPIAiTNLNUqPZmk home-workbuddy-github`。
 - **更新顺序**：改完先 `git push origin main`（Gitee），再按需喊 AI 用 PAT 推 GitHub。
-- **PAT 安全策略（2026-08-20 用户决定）**：当前用的是 **classic PAT**（`ghp_...Lp1`，scope=`repo`=全仓库读写，过度授权，过期 2026-09-18）。用户要求"撤销并替换成受限 PAT"。
-  - ⚠️ **AI 能力边界**：① 创建 fine-grained PAT 必须由用户在 GitHub 网页生成，AI 不能代建（需用户登录凭证）；② 撤销 classic PAT 无法通过 API 自删（`DELETE /authorizations` 需 basic auth 用户名+密码，bearer token 不行），须用户在网页 Settings→Developer settings→PAT 手动撤销。
-  - **受限 PAT 规格（替换目标）**：Fine-grained PAT，Resource owner=`mouren2580`，Repository access=仅 `fangtai-dashboard` + `fangtai-workbuddy-sync`，Permissions→Repository→Contents=Read and write，设合理过期（如 1 年）。
-  - **切换顺序（避免推送中断）**：用户先建新 fine-grained PAT 并发给 AI → AI 改 insteadOf 里的 token 并验证 push → 用户再网页撤销旧 classic PAT。当前旧 PAT 仍保留使用中。
+- **PAT 安全策略（2026-08-20 用户决定）**：原用 **classic PAT**（`ghp_...Lp1`，scope=`repo`）。用户曾要求"撤销并替换成受限 PAT"后说"先不动了"。
+  - ⚠️ **2026-09-11 实测：该 classic PAT 已失效**——调 GitHub API 返回 `401 Bad credentials`（可能被撤销/提前过期）。AI 当前**无法推送 GitHub Pages**，需用户提供新的有效 PAT。
+  - ⚠️ **AI 能力边界**：① 创建 fine-grained PAT 必须由用户在 GitHub 网页生成，AI 不能代建；② 撤销 classic PAT 需用户在网页手动撤销。
+  - **推荐替换**：Fine-grained PAT，Resource owner=`mouren2580`，Repository access=仅 `fangtai-dashboard`（Pages 站）+ 可选 `fangtai-workbuddy-sync`，Contents=Read and write，合理过期。
+  - **切换顺序**：用户提供新 PAT → AI 改 `_gh_push.py`/insteadOf 里的 token 并验证 push → 用户再网页撤销旧 PAT。
 
 ## 网页看板（fangtai-dashboard）机制
-- 地址：`https://mouren2580.github.io/fangtai-dashboard/`，GitHub Pages 静态站（源 `main`/根目录，legacy build，public）。
-- **现状（2026-08-20 改造后）**：`index.html` 已改为**内嵌最新 xlsx 自动加载**版——基于原看板代码 + 内嵌 `dashboard_offline.html` 数据，打开即显示最新数据，且保留「同步Excel」按钮可手动覆盖。原版备份在仓库 `index.orig.html`。
-- **如何更新该看板（AI 在沙箱执行）**：浅克隆（`--depth 1`）`mouren2580/fangtai-dashboard` → 用最新 `dashboard_offline.html` 覆盖 `index.html` → `git config user.email/user.name` 设身份 → commit → push（沙箱旁路 + PAT `insteadOf`）。推送后 Pages 自动重建（~1-3 分钟）。`dashboard_offline.html` 本身由工作区 xlsx 重嵌生成（见 2026-08-20 日志）。
-- **截止日口径**：由 `dashboard_offline.html` 的 `deriveCutoffFromWorkbook()` 扫**全工作簿所有「日期/时间」列取最大值**（封顶今天）自动推断，不再硬编码。注意：**数据截止日 = 业务数据最大日期（如 8-19）≠ 文件更新/修改日期（如 8-20）**。
-- **其它可达看板**：① CloudStudio 离线地址 `https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（内嵌 xlsx，需 AI 重部署更新）；② 家里本地 `dashboard/local.html` + `python -m http.server 8090`（实时读工作区 xlsx，未启用）。
-- **历史背景（已过时，仅供参考）**：改造前该看板纯前端、仅按钮上传、数据硬编码 8/17 快照、AI 无法远程更新；2026-08-20 已通过仓库 push 改造解决。
+- **多月份架构（2026-09 起）**：`dashboard_offline.html` 用 `MONTH_DATA` 对象按月份键（`2026-01`…`2026-09`）存各月数据，每块 = `MDATA_YYYY_MM_{D,T,B,W,E}`（`D`主数据/`T`工程师/`B`大保养/`W`周数据/`E`延保）；`BASE_MONTH="2026-08"` 锚点不被重建覆盖；`CURRENT_MONTH` 默认 `2026-09`。页面 `fetch('version.json')` 做缓存穿透（BUILD 标记比对）。
+- **数据生成工具**：`build_dashboard.py`（原 `build()` 主数据+大保养生成器）**已丢失**（git/磁盘均无）。工作区现用 **`gen_month.py`**（自包含）重建某月五块并注入 HTML：
+  - 复用 `sync-kit/sync.py` 的 `build_tech`/`gen_extend`/`gen_weekly`（T/E/W）。
+  - `build_main`（D）：`服务产品收入统计` 按 (办事处,服务中心,服务网点) 聚合 15 品项+合计+来源，并补 `time` 字段（服务月进度）。
+  - `build_bigcare`（B）：`清洗保养总单`=**销售分类(col16)=清洗保养**；`剔除项`/`大保养项`=**服务收费项目(col13)**，与清洗保养总单**可重叠**（独立 if）；`分母=总单-剔除`。
+  - `gen_weekly` 周起点**向后**取服务月所在周周一（如 9 月从 8/24 起），脚手架整月 5 周，数据按截止日过滤。
+  - 顶部 `EXCEL` 路径需改成新 Excel；`CUTOFF`=更新日前一天（铁律）。运行：`python gen_month.py`（需 openpyxl，已装于 venv）。
+- **如何更新看板（AI 流程）**：① 改 `gen_month.py` 的 `EXCEL` 路径 → 跑它重建并注入 `dashboard_offline.html` + 写 `version.json`（BUILD 号）+ 改 `var BUILD`；② 复制 `dashboard_offline.html`+`version.json` 到 `deploy_cs/` → `workbuddy_cloudstudio_deploy`（同 URL）；③ `git push origin main`（Gitee，沙箱旁路）；④ GitHub Pages：`_gh_push.py`（需有效 PAT，读 `GITHUB_PAT` 环境变量）。
+- **截止日口径（铁律）**：`截止日 = 更新日前一天`。如 9-11 更新 → 锁 **2026-09-10**；服务周期 = 上月28日→当月27日（9月=8.28–9.27，31天）。
+- **GitHub Pages 地址**：`https://mouren2580.github.io/fangtai-dashboard/`（源 `fangtai-dashboard` 仓 `main`/根目录）。**2026-09-11 状态：仍停留在用户 9-11 BUILD（commit 41896a0e08，KPI 与本次一致），因 classic PAT 失效 AI 未能推送最新版。**
+- **CloudStudio 地址**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（2026-09-11 已部署最新版 ✅）。
+- **历史背景（已过时，仅供参考）**：早期为内嵌 xlsx / 按钮上传机制，2026-08-20 改造、2026-09-11 用户改"在线版"硬编码 JS。

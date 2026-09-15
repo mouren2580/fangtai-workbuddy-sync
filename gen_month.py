@@ -248,6 +248,8 @@ def gen_weekly(excel, cutoff, data_cutoff):
         net[wk][nm]["total"] += amt
         add_map(nm, off)
     # 清洁耗材 : CSM配件
+    # 注意：CSM配件表 col0 是「大区」而非「办事处」，不能用于登记 网点→办事处 映射
+    #（否则 WMS 网点买断行会被错误归到大区名下；与参考看板一致：映射只取自 CSM服务项目）
     ws = find_sheet("CSM配件")
     for r in list(ws.iter_rows(values_only=True))[2:]:
         if g(r, 17) != "清洁耗材":
@@ -267,7 +269,6 @@ def gen_weekly(excel, cutoff, data_cutoff):
             net[wk][nm]["office"] = off
         net[wk][nm]["清洁耗材"] += amt
         net[wk][nm]["total"] += amt
-        add_map(nm, off)
     # 清洁耗材 : WMS网点买断配件明细
     ws = find_sheet("WMS网点买断配件明细")
     for r in list(ws.iter_rows(values_only=True))[2:]:
