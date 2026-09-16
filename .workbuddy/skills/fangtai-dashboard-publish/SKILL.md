@@ -12,9 +12,14 @@ agent_created: true
 # 环境准备（每条 Bash 都要带）
 ```bash
 export PATH="/c/Users/40973/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:/c/Users/40973/.workbuddy/binaries/PortableGit/versions/1.2.0/mingw64/bin:/c/WINDOWS/system32:$PATH"
-PY=C:/Users/40973/.workbuddy/binaries/python/versions/3.13.12/python.exe
+export PYTHONIOENCODING=utf-8
+PY="C:/Users/40973/.workbuddy/binaries/python/envs/default/Scripts/python.exe"   # ← 必须用这个 venv
 ```
 裸 `bash` 里 `dirname`/`cd` 会报错，`python`/`git` 也不在 PATH，必须显式加前缀。
+⚠️ **不要用** `binaries/python/versions/3.13.12/python.exe`（系统级那个）——它**没装 openpyxl**，跑 `build_month.py` 会
+`ModuleNotFoundError: No module named 'openpyxl'`。解析 Excel 一律用上面 venv 里的 python（openpyxl 3.1.5）。
+⚠️ **git 操作路径必须写 Windows 形式**（`C:/Users/...` 或相对当前目录）：`git -C "/c/Users/..."` 会报
+`fatal: cannot change to '...': No such file or directory`（git.exe 不认 MSYS `/c/` 路径）。bash 的 `cp`/`ls` 两种都认。
 
 # 关键认知：同一份看板有 4 个副本，必须一起改
 | 文件 | 用途 |
@@ -53,11 +58,24 @@ import json,datetime;print(json.dumps({'v':'YYYYMMDD-HHMM','cut':'2026-09-14','t
 # 发布三步
 1. **GitHub Pages（同事主用链接，优先保证）**
    ```bash
-   cd /d/WorkBuddy && C:/.../python.exe push_gh_pages.py       # 走 SSH，无需 PAT
+   cd /d/WorkBuddy && "$PY" push_gh_pages.py       # 走 SSH，无需 PAT
    ```
    - 脚本自动：维护常驻克隆 → 覆盖 `index.html`+`version.json` → commit → push
    - **必须加 `dangerouslyDisableSandbox: true`**（要读 `~/.ssh`，沙箱会拦）
-   - 复核：`python push_gh_pages.py --status` 或 `curl -s https://mouren2580.github.io/fangtai-dashboard/version.json`
+   - ⚠️ **千万不要用 `run_in_background` 跑它**：后台环境下 SSH 会被挂起，实测卡 25 分钟零输出、克隆目录里文件根本没被覆盖。
+     必须**前台**执行（长超时 300000ms）。若已卡住，用 TaskStop 杀掉后走下面的手动流程。
+   - 复核：`"$PY" push_gh_pages.py --status` 或 `curl -s https://mouren2580.github.io/fangtai-dashboard/version.json`
+   - **手动 fallback（脚本卡死时用，旁路 + 前台）**：
+     ```bash
+     CL="C:/Users/40973/.workbuddy/tmp/fangtai-dashboard"     # 必须 Windows 路径形式
+     export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
+     git -C "$CL" fetch --depth 1 origin main && git -C "$CL" reset --hard origin/main
+     cp deploy_cs/index.html "$CL/index.html"; cp deploy_cs/version.json "$CL/version.json"
+     git -C "$CL" add -A
+     git -C "$CL" -c user.name=mouren2580 -c user.email=409737410@qq.com commit -q -m "看板数据更新至 <cut>"
+     git -C "$CL" push origin main
+     ```
+     ⚠️ 只覆盖 `index.html` 与 `version.json`，仓库里的 `drainage/`、`sync-kit/`、`sync.sh`、`index.orig.html`、`.nojekyll` 一律不碰。
 2. **CloudStudio**：`workbuddy_sites_deploy(directory="D:\\WorkBuddy\\deploy_cs", language="static", appName="方太西北服务产品月报看板", domainPrefix="fangtai-nw-dashboard", userAskedToPublish=true)`
    - **必须用户在本轮明确同意**才能覆盖线上链接（工具强约束，先问一句）
    - ⚠️ 报 `应用预留域名 ... 未绑定到本次发布环境` 是**假失败**：内容通常已发布。用 `curl -s https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.json` 验证，返回新 BUILD 即成功，不要把报错原样转述给用户当失败
@@ -79,6 +97,19 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 ```
 两边 `v` 应等于新 BUILD；必要时再抓页面印证具体改动（如 `grep -o "const pct = x => (x\*100)\.toFixed(2)"`）。GitHub Pages 构建需 1–3 分钟，刚推完立刻查可能是旧版。
 
-# 相关：新 Excel 数据更新流程
-`build_month.py` 顶部 `EXCEL` 指向新表 → `python build_month.py check <参考版截止日>` 验证解析器逐项吻合 → `python build_month.py build <更新日前一天>` → 然后走上文发布三步。
-截止日铁律：**截止日 = 更新日前一天**（如 9-15 更新 → 2026-09-14）。服务周期 上月28日→当月27日（9 月 = 8.28–9.27，共 31 天）。
+# 相关：新 Excel 数据更新流程（数据类改动走这条）
+**截止日铁律**：**截止日 = 更新日前一天**（如 9-16 更新 → 2026-09-15）。服务周期 上月28日→当月27日（9 月 = 8.28–9.27，共 31 天）。
+
+1. **先确认真实截止日**：别直接信"更新日−1"，扫一下 Excel 各表日期列最大值（工单 col41 / CSM服务项目 col7 / CSM配件 col36 / 工单自购配件明细 col10，0 基索引），两者应吻合。
+2. `"$PY" build_month.py check <上一次的截止日>` —— 用新 Excel 按旧截止日重算，**与上一次 build 的 summary 数字对比**（工单数、止回阀、延保条数、清洗条数、大保养）。
+   一致 ⇒ 历史数据无修订、解析器正常；不一致 ⇒ 逐项查是补录还是解析异常。
+   ⚠️ check 的"与参考看板逐块对照"是拿 `dashboard_ref.html` 比的，而 REF 往往停在更早的截止日，**满屏 DIFFERS 属预期**，不能当异常。
+3. `"$PY" build_month.py build <新截止日>` → 输出 summary + 新 BUILD（写入 `dashboard_offline.html` 与 `version.json`）。
+   **自洽校验**：工单总数增量应 ≈ 新截止日当天的工单行数（本日实测 +750 对 +750 ✅）。
+4. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：
+   ```bash
+   git show HEAD:dashboard_offline.html > _prev.html
+   ```
+   用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`(1–8月)+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
+   并核对 `MDATA_*` 声明数量（当前 40 个）与 8 月基准块（8 月清洗 788 条、延保 139 条）。校验完删除 `_prev.html`。
+5. 同步 4 份副本 + version.json（见上文），再走发布三步。

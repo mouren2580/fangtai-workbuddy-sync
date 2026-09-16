@@ -61,7 +61,7 @@
   - ⚠️ 该仓除 `index.html` 外还有 `drainage/`、`sync-kit/`、`sync.sh`、`index.orig.html`、`.nojekyll`——**只覆盖 index.html 与 version.json，其它一律不碰**。
   - GitHub Pages 重建约 **1–3 分钟**，用 `python push_gh_pages.py --status` 复核（线上 `version.json` 的 `v`/`cut`）。
   - 备用：API 版脚本 `_gh_push.py`（需有效 PAT，目前不可用，已支持 `--check` 自检）。
-- **CloudStudio / 线上分享链接**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（目录 `D:\WorkBuddy\deploy_cs`）。**2026-09-15 09:29 已成功更新至 BUILD `20260915-0929`（截止 9-14）✅**，旧 `.link` 链接实测已生效。
+- **CloudStudio / 线上分享链接**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（目录 `D:\WorkBuddy\deploy_cs`）。**2026-09-16 13:00 已更新至 BUILD `20260916-1259`（截止 9-15）✅**，旧 `.link` 链接实测已生效。
 - **⚠️ 部署工具的「预留域名未绑定」报错＝假失败（2026-09-15 实测）**：`workbuddy_sites_deploy` 可能返回
   `应用预留域名 fangtai-dashboard.app.workbuddy.host 未绑定到本次发布环境，本次发布已停止。`
   **但内容其实已经上传并 release 成功**（`artifactRelease` 返回 201，`releaseUrl` 为 sandbox 的 `.host` 域名；
@@ -72,6 +72,7 @@
 - **📐 显示规范：所有百分比一律两位小数（用户 2026-09-15 要求）**：全局改 `const pct = x => (x*100).toFixed(2) + '%'` 即可覆盖绝大多数显示位；另需改同比/合计/品项分布/大保养/自购耗材/年度目标面板/技师面板的 `.toFixed(1)`。**不要改** CSS 宽度、`hsl()` 颜色、条形图宽度用的 `Math.round(x*100)`。KPI 卡环形图（`.kpi .ring` 56px）内文字要配 `font-size="10.5"` 才不撞环体。自检：`grep -n "toFixed(1)" dashboard_offline.html` 只应剩条形图宽度一处。
 - **⚠️ 同一份看板有 4 个副本，改样式/JS 必须一起改**：`dashboard_offline.html`（源）、`dashboard.html`（离线交付）、`deploy_cs/index.html`（CloudStudio）——三者 md5 应一致；另 `dashboard_ref.html` 是 `build_month.py` 的**底板**，不写进去下次 `build_month.py build` 重建就丢改动。
 - **🆕 发布 SOP 已固化为 skill**：`D:\WorkBuddy\.workbuddy\skills\fangtai-dashboard-publish\SKILL.md`（改看板 → 改 4 副本 + BUILD/version.json → push_gh_pages.py → 部署 CloudStudio → 双备份仓推送 → curl 验收）。改看板前先读它，可省掉 PATH/沙箱/假失败等一堆试错。
-- **最新状态（2026-09-15 09:29）**：BUILD `20260915-0929`，截止 `2026-09-14`，四端（Pages `b37426b` / CloudStudio / 工作区 / 备份仓 `9f0fe21`）全部一致，百分比已统一两位小数。
+- **最新状态（2026-09-16 13:00）**：BUILD `20260916-1259`，截止 `2026-09-15`。四端一致（Pages `e48903f` / CloudStudio / 工作区 / 备份仓 `23730a0`）。核心数字：工单 **13,886**（+750）/ 止回阀 **884**（烟机安装 4,663、占比 18.96%）/ 大保养 **13÷465＝2.80%**（总单 475）/ 延保明细 **115 条 ¥43,661.90** / 清洗保养 **464 条** / 增值产品 1,349 / 增值配件当月 1,868 / D 报表全量 **¥321,560.84**（91 网点，不过滤日期）/ T 工程师 214 人 ¥274,581.90。历史月 1–8 月 + 8 月清洗 788 条、延保 139 条均完整保留 ✅
+- **🔧 环境要点（2026-09-16 确认）**：解析 Excel 的 `build_month.py` **必须用 venv python** `C:/Users/40973/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（系统级 3.13.12 **无 openpyxl**）；`push_gh_pages.py` **不能后台运行**（SSH 会挂起，实测卡 25 分钟），必须前台+沙箱旁路，卡住就手动推 `git -C "C:/Users/.../tmp/fangtai-dashboard"`（git 不认 `/c/` 路径形式）。
 - **`?newPanel=true` 之类查询参数无效**：页面里没有任何 `newPanel` 代码，纯缓存穿透/来源标记，可忽略。判断"线上是哪一版"就看 `version.json` 的 `v`/`cut` 与页面 `var BUILD`。
 - **历史背景（已过时，仅供参考）**：早期为内嵌 xlsx / 按钮上传机制，2026-08-20 改造、2026-09-11 用户改"在线版"硬编码 JS。
