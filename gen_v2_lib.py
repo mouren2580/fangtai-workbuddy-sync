@@ -77,9 +77,21 @@ EXCLUDE = ["保养超范围收费", "灶具保养"]
 BIG = ["油烟机大保养", "油烟机大保养升级包"]
 SMOKE_SITES = ("安装", "改装", "油烟机预埋烟管")
 
-# 工单表列
-WO_OFFICE, WO_PROD, WO_SITE, WO_TYPE, WO_DATE = 11, 73, 57, 65, 41
-WO_TECH, WO_TCODE, WO_NET, WO_NO = 55, 30, 79, 53
+# 工单表列（2026-09-18：平台导出把「办事处名称」由 L 挪到 K、「工程师编号」由 AE 挪到 AF，
+# 故改为按表头名解析 wo_cols()，下列常量仅作兜底）
+WO_OFFICE, WO_PROD, WO_SITE, WO_TYPE, WO_DATE = 10, 73, 57, 65, 41
+WO_TECH, WO_TCODE, WO_NET, WO_NO = 55, 31, 79, 53
+
+# key -> (表头名, 兜底列号)
+WO_HEADERS = {
+    "office": ("办事处名称", WO_OFFICE), "prod": ("产品组", WO_PROD),
+    "site": ("服务项目", WO_SITE), "type": ("工单类型", WO_TYPE),
+    "date": ("服务完成时间", WO_DATE), "tech": ("服务工程师", WO_TECH),
+    "tcode": ("工程师编号", WO_TCODE), "net": ("服务网点", WO_NET),
+    "no": ("工单编号", WO_NO),
+}
+# 自购配件明细列
+
 # CSM配件列
 PJ_OFFICE, PJ_NET, PJ_TECH, PJ_TCODE = 2, 3, 5, 6
 PJ_NAME, PJ_CODE, PJ_CLASS, PJ_QTY, PJ_AMT, PJ_DATE = 12, 13, 17, 18, 27, 36
@@ -90,6 +102,26 @@ SP_DATE, SP_ITEM, SP_CLASS, SP_AMT = 7, 13, 16, 24
 # 办事处需由 技师编号/服务网点 反查 CSM配件 或 工单表 得到）
 ZG_ALGO, ZG_NET, ZG_TECH, ZG_TCODE = 15, 5, 17, 28
 ZG_NAME, ZG_CODE, ZG_QTY, ZG_DATE = 13, 23, 19, 10
+ZG_HEADERS = {
+    "net": ("服务网点", ZG_NET), "algo": ("大区部", ZG_ALGO), "tech": ("服务工程师", ZG_TECH),
+    "tcode": ("工程师编号", ZG_TCODE), "name": ("配件名称", ZG_NAME),
+    "code": ("物料编码", ZG_CODE), "qty": ("配件数量", ZG_QTY), "date": ("录入完成时间", ZG_DATE),
+}
+
+
+def _cols(ws, header_row, spec, tag=""):
+    """按表头名解析列号；找不到表头则回退兜底常量并告警（平台导出列序偶有变动）"""
+    hdr = next(ws.iter_rows(min_row=header_row, max_row=header_row, values_only=True), None) or ()
+    out = {}
+    for k, (name, fallback) in spec.items():
+        idx = next((i for i, v in enumerate(hdr)
+                    if v is not None and str(v).strip() == name), None)
+        if idx is None:
+            idx = fallback
+            print("[warn] %s 未找到表头 %r → 回退列号 %d" % (tag, name, fallback))
+        out[k] = idx
+    return out
+
 
 
 def _rows(ws, header_row):
@@ -110,6 +142,7 @@ def _uniq(*counters):
 def build_workorder(excel, cutoff, use_cutoff):
     wb = openpyxl.load_workbook(excel, read_only=True, data_only=True)
     ws = wb["工单"]
+    C = _cols(ws, 1, WO_HEADERS, tag="工单表")      # 按表头名解析列号（导出列序会变）
     office_net = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [None, 0])))
     o_ord, n_ord = [], {}
     office_cnt = Counter()
@@ -118,16 +151,16 @@ def build_workorder(excel, cutoff, use_cutoff):
     yj_cnt = Counter()
     yj_total = 0
     for r in _rows(ws, 1):
-        if not r or len(r) <= WO_NO:
+        if not r or len(r) <= C["no"]:
             continue
-        d = _date(r[WO_DATE])
+        d = _date(r[C["date"]])
         if d is None:
             continue
         if use_cutoff and d > cutoff:
             continue
-        off, net = _s(r[WO_OFFICE]), _s(r[WO_NET])
-        tech, code = _s(r[WO_TECH]), _s(r[WO_TCODE])
-        no = _s(r[WO_NO])
+        off, net = _s(r[C["office"]]), _s(r[C["net"]])
+        tech, code = _s(r[C["tech"]]), _s(r[C["tcode"]])
+        no = _s(r[C["no"]])
         if off not in o_ord:
             o_ord.append(off)
         nm = n_ord.setdefault(off, [])
@@ -143,10 +176,10 @@ def build_workorder(excel, cutoff, use_cutoff):
         if t is None:
             t = b["techs"][(tech, code)] = {"name": tech, "code": code, "cnt": 0, "zh": 0, "yj": 0}
         t["cnt"] += 1
-        pg[_s(r[WO_PROD])] += 1
-        wt[_s(r[WO_TYPE])] += 1
-        si[_s(r[WO_SITE])] += 1
-        if _s(r[WO_PROD]) == "吸油烟机" and _s(r[WO_SITE]) in SMOKE_SITES:
+        pg[_s(r[C["prod"]])] += 1
+        wt[_s(r[C["type"]])] += 1
+        si[_s(r[C["site"]])] += 1
+        if _s(r[C["prod"]]) == "吸油烟机" and _s(r[C["site"]]) in SMOKE_SITES:
             t["yj"] += 1
             yj_cnt[off] += 1
             yj_total += 1
@@ -380,22 +413,23 @@ def build_valueparts(excel, cutoff, svc=None):
 
     # 工单自购配件明细
     ws = wb["工单自购配件明细"]
+    Z = _cols(ws, 1, ZG_HEADERS, tag="自购配件表")   # 按表头名解析列号
     for r in _rows(ws, 1):
-        if not r or len(r) <= ZG_DATE:
+        if not r or len(r) <= Z["date"]:
             continue
-        d = _date(r[ZG_DATE])
+        d = _date(r[Z["date"]])
         if d is None or d > cutoff or d < svc:
             continue
-        net, tech, code = _s(r[ZG_NET]), _s(r[ZG_TECH]), _s(r[ZG_TCODE])
+        net, tech, code = _s(r[Z["net"]]), _s(r[Z["tech"]]), _s(r[Z["tcode"]])
         off = (tech_office.get(code) or tech_office.get("·" + tech)
                or net_office.get(net) or "")      # 反查办事处，勿用本表「大区部」列
         tk = "%s（%s）" % (tech, code) if code else tech
-        pn_raw = _s(r[ZG_NAME])
+        pn_raw = _s(r[Z["name"]])
         if pn_raw in pname2name:
             enc_pn.setdefault(pn_raw, None)
-        nm = code2name.get(_s(r[ZG_CODE])) or pname2name.get(pn_raw)
+        nm = code2name.get(_s(r[Z["code"]])) or pname2name.get(pn_raw)
         if nm:
-            add(nm, tk, off, d, _num(r[ZG_QTY]))
+            add(nm, tk, off, d, _num(r[Z["qty"]]))
 
     def _ord_pns(pns):
         """配件名清单按源表首次出现顺序排列（与参考看板一致）"""
@@ -590,3 +624,41 @@ def build_cleaning(excel, cutoff, svc=None):
                      "ei": _s(r[SP_TCODE]), "d": d.strftime("%Y-%m-%d"), "it": it,
                      "amt": _num(r[SP_AMT])})
     return recs          # 保持源表行序（与参考看板一致）
+
+
+# ================= 列序自检 =================
+# (工作表, 表头行, {列号: 期望表头名}) —— 平台导出列序偶有变动，改错列会静默出错数据
+HEADER_SPEC = [
+    ("CSM配件", 2, {PJ_OFFICE: "办事处", PJ_NET: "服务网点", PJ_TECH: "服务工程师",
+                    PJ_TCODE: "服务工程师编码", PJ_NAME: "配件名称", PJ_CODE: "配件编码",
+                    PJ_CLASS: "销售分类", PJ_QTY: "数量", PJ_AMT: "上缴金额", PJ_DATE: "录入完成时间"}),
+    ("CSM服务项目", 2, {SP_OFFICE: "办事处", SP_NET: "服务网点", SP_TECH: "服务工程师",
+                        SP_TCODE: "服务工程师编号", SP_DATE: "录入完成时间",
+                        SP_ITEM: "服务收费项目", SP_CLASS: "销售分类", SP_AMT: "上缴金额"}),
+    ("服务产品收入统计", 2, {1: "服务中心", 2: "办事处", 3: "服务网点", 6: "服务工程师",
+                             7: "服务工程师编码", 8: "数据来源", 24: "合计"}),
+    ("WMS网点买断配件明细", 2, {3: "CSM网点名称", 8: "实收总金额（上缴金额）",
+                                10: "销售分类", 11: "发货时间"}),
+]
+
+
+def verify_columns(excel):
+    """核对各表「固定列号」是否仍对得上表头名，返回不一致清单（打印告警）"""
+    wb = openpyxl.load_workbook(excel, read_only=True, data_only=True)
+    bad = []
+    for sheet, hrow, spec in HEADER_SPEC:
+        if sheet not in wb.sheetnames:
+            bad.append((sheet, -1, "表存在", "缺失"))
+            continue
+        ws = wb[sheet]
+        hdr = list(ws.iter_rows(min_row=hrow, max_row=hrow, values_only=True))
+        hdr = hdr[0] if hdr else ()
+        for idx, want in spec.items():
+            got = hdr[idx] if idx < len(hdr) and hdr[idx] is not None else ""
+            if str(got).strip() != want:
+                bad.append((sheet, idx, want, str(got).strip()))
+    for sheet, idx, want, got in bad:
+        print("[warn] 列序变动: %s 第%d列 期望「%s」实际「%s」" % (sheet, idx, want, got))
+    if not bad:
+        print("[OK] 列序自检通过（CSM配件/CSM服务项目/服务产品收入统计/WMS买断）")
+    return bad

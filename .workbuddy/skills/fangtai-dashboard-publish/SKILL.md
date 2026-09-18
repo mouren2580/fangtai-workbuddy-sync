@@ -16,6 +16,7 @@ export PYTHONIOENCODING=utf-8
 PY="C:/Users/40973/.workbuddy/binaries/python/envs/default/Scripts/python.exe"   # ← 必须用这个 venv
 ```
 裸 `bash` 里 `dirname`/`cd` 会报错，`python`/`git` 也不在 PATH，必须显式加前缀。
+⚠️ **脚本路径别写 `/d/WorkBuddy/x.py`**：会被解析成 `D:\d\WorkBuddy\x.py` 报 `can't open file`。用 `D:/WorkBuddy/x.py`，或先 `cd /d/WorkBuddy` 再写相对路径。
 ⚠️ **不要用** `binaries/python/versions/3.13.12/python.exe`（系统级那个）——它**没装 openpyxl**，跑 `build_month.py` 会
 `ModuleNotFoundError: No module named 'openpyxl'`。解析 Excel 一律用上面 venv 里的 python（openpyxl 3.1.5）。
 ⚠️ **git 操作路径必须写 Windows 形式**（`C:/Users/...` 或相对当前目录）：`git -C "/c/Users/..."` 会报
@@ -101,15 +102,22 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 **截止日铁律**：**截止日 = 更新日前一天**（如 9-16 更新 → 2026-09-15）。服务周期 上月28日→当月27日（9 月 = 8.28–9.27，共 31 天）。
 
 1. **先确认真实截止日**：别直接信"更新日−1"，扫一下 Excel 各表日期列最大值（工单 col41 / CSM服务项目 col7 / CSM配件 col36 / 工单自购配件明细 col10，0 基索引），两者应吻合。
-2. `"$PY" build_month.py check <上一次的截止日>` —— 用新 Excel 按旧截止日重算，**与上一次 build 的 summary 数字对比**（工单数、止回阀、延保条数、清洗条数、大保养）。
+   ⚠️ **列序坑（2026-09-18 踩过）**：平台导出**会调整列顺序**。上次「工单」表把 `办事处名称` L(11)→K(10)、`工程师编号` AE(30)→AF(31)，硬编码列号导致办事处名读空、技师编码读成「已支付」，**数量对、归属全错且不报错**。
+   → 现已改为按表头名解析（`gen_v2_lib._cols` + `WO_HEADERS`/`ZG_HEADERS`），`build_month.make_blocks()` 开头还会跑 `G.verify_columns(EXCEL)` 自检其余固定列号。
+   → **仍要看 summary 的数字是否合理**（办事处数应为 6、网点 ~98、工程师 ~238），异常就先去核对表头。
+2. **留一份上一版做对照**（关键，别忘）：
+   ```bash
+   cp dashboard_offline.html _prev.html        # build 会覆盖 dashboard_offline.html
+   ```
+   `.gitignore` 已忽略 `_prev*.html`。
+3. `"$PY" build_month.py check <上一次的截止日>` —— 用新 Excel 按旧截止日重算，**与上一次 build 的 summary 数字对比**（工单数、止回阀、延保条数、清洗条数、大保养）。
    一致 ⇒ 历史数据无修订、解析器正常；不一致 ⇒ 逐项查是补录还是解析异常。
    ⚠️ check 的"与参考看板逐块对照"是拿 `dashboard_ref.html` 比的，而 REF 往往停在更早的截止日，**满屏 DIFFERS 属预期**，不能当异常。
-3. `"$PY" build_month.py build <新截止日>` → 输出 summary + 新 BUILD（写入 `dashboard_offline.html` 与 `version.json`）。
-   **自洽校验**：工单总数增量应 ≈ 新截止日当天的工单行数（本日实测 +750 对 +750 ✅）。
-4. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：
-   ```bash
-   git show HEAD:dashboard_offline.html > _prev.html
-   ```
-   用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`(1–8月)+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
+   ✅ **更严格的做法：语义比对**（比 summary 数字可靠得多）——把重算结果与 `_prev.html` 逐叶子比对，列表按**递归多重集**比较：
+   - 只报「真实差异」，把「明细行序不同」单独归类（明细表按源表行序，跨 Excel 文件本就不可复现，不算错）；
+   - 预期结论：`workorder`/`valueadded`/`W` 完全一致；`valueparts`/`bigcare`/`B`/`E`/`EXTEND_TIME_DATA`/`CLEANING_DATA` 仅顺序不同；**只有 `D`/`T` 有真实差异且属正常**（二者取「报表全量」、不过滤日期，换快照必变）。
+4. `"$PY" build_month.py build <新截止日>` → 输出 summary + 新 BUILD（写入 `dashboard_offline.html` 与 `version.json`）。
+   **自洽校验**：工单总数增量应 ≈ 新增天数的工单行数之和（如 9-15→9-17 的 682+755=1437）。
+5. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`(1–8月)+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
    并核对 `MDATA_*` 声明数量（当前 40 个）与 8 月基准块（8 月清洗 788 条、延保 139 条）。校验完删除 `_prev.html`。
-5. 同步 4 份副本 + version.json（见上文），再走发布三步。
+6. 同步 4 份副本 + version.json（见上文），再走发布三步。

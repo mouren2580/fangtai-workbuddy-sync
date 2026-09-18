@@ -33,3 +33,4 @@ _test_*.py
 _gh_live.html
 _inspect_out.txt
 _verify_*.py
+_prev*.html

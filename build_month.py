@@ -111,6 +111,7 @@ def make_blocks(cut):
     svc = G.svc_start(cut.month, cut.year)
     end = svc + datetime.timedelta(days=30)
 
+    G.verify_columns(EXCEL)          # 列序自检：平台导出偶会调整列顺序
     wo = G.build_workorder(EXCEL, cut, True)
     va = G.build_valueadded(EXCEL, cut)
     vp = G.build_valueparts(EXCEL, cut)
