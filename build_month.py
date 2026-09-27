@@ -13,7 +13,7 @@ import gen_month as GM
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 底板 = 用户最新的参考看板（每次更新时用新收到的版本覆盖本文件）
 REF = os.path.join(HERE, "dashboard_ref.html")
-EXCEL = os.path.join(HERE, "2026年9月西北服务产品(3).xlsx")
+EXCEL = os.path.join(HERE, "2026年9月西北服务产品(5).xlsx")
 OUT = os.path.join(HERE, "dashboard_offline.html")
 
 # 需要「保留历史月」的多月份容器块

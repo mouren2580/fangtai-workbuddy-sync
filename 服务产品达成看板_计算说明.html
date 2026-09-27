@@ -14,7 +14,7 @@
   body{margin:0;background:var(--bg);color:var(--ink);
        font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",Roboto,sans-serif;
        line-height:1.75;font-size:15px;}
-  .wrap{max-width:920px;margin:0 auto;padding:40px 22px 70px;}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 70px;}
   header{border-bottom:3px solid var(--brand);padding-bottom:18px;margin-bottom:8px;}
   h1{font-size:26px;margin:0 0 8px;letter-spacing:.5px;}
   .meta{color:var(--sub);font-size:13px;}
@@ -32,6 +32,7 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0;}
   .tip{border-left:4px solid var(--amber);background:var(--amber-soft);padding:10px 14px;border-radius:6px;margin:10px 0;font-size:14px;}
   .brandbox{border-left:4px solid var(--brand);background:var(--brand-soft);padding:10px 14px;border-radius:6px;margin:10px 0;font-size:14px;}
+  .newbox{border-left:4px solid var(--green);background:var(--green-soft);padding:10px 14px;border-radius:6px;margin:10px 0;font-size:14px;}
   .formula{background:var(--blue-soft);border-left:4px solid var(--blue);padding:10px 14px;border-radius:6px;
            margin:10px 0;font-size:14.5px;}
   .formula b{color:var(--blue);}
@@ -40,6 +41,7 @@
   .toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 20px;margin:20px 0;}
   .toc a{color:var(--blue);text-decoration:none;margin-right:14px;line-height:2;}
   .toc a:hover{text-decoration:underline;}
+  .star{color:var(--brand);font-weight:700;}
   footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px;}
 </style>
 </head>
@@ -48,8 +50,16 @@
 
 <header>
   <h1>方太西北大区 · 服务产品达成看板 — 计算说明</h1>
-  <div class="meta">版本 BUILD <b>20260915-0834</b> ｜ 数据截止 <b>2026-09-14</b> ｜ 数据更新于 2026-09-15 ｜ 适用范围：西北大区 6 个办事处（新疆 / 宁夏 / 兰州 / 包头 / 呼和浩特 / 西宁）</div>
+  <div class="meta">
+    版本 BUILD <b>20260926-1024</b> ｜ 数据截止 <b>2026-09-25</b> ｜ 数据更新于 2026-09-26 ｜ 统计口径冻结日 <b>2026-09-25</b><br>
+    适用范围：西北大区 6 个办事处（新疆 / 宁夏 / 兰州 / 包头 / 呼和浩特 / 西宁）
+  </div>
 </header>
+
+<div class="newbox">
+  <b>本版（2026-09-26）新增内容：</b>把 9/12–9/26 期间的<b>全部改动</b>整理进 <a href="#s7">第七章「最近改动清单」</a>，
+  供家里电脑逐条对照补齐（尤其<b>各产品线环形图 / 查看范围切换 / 百分比两位小数 / 时间窗口跨月</b>）。
+</div>
 
 <div class="toc">
   <a href="#s1">一、数据来源与字段</a>
@@ -57,20 +67,40 @@
   <a href="#s3">三、目标口径</a>
   <a href="#s4">四、各模块计算逻辑</a>
   <a href="#s5">五、调平约定</a>
-  <a href="#s6">六、配色约定</a>
-  <a href="#s7">七、更新与同步</a>
+  <a href="#s6">六、配色与显示约定</a>
+  <a href="#s7">七、⚠️ 最近改动清单</a>
+  <a href="#s8">八、更新与部署流程</a>
 </div>
 
 <h2 id="s1">一、数据来源与字段</h2>
 <table>
-  <thead><tr><th>看板板块</th><th>数据表</th><th>关键字段（列）</th></tr></thead>
+  <thead><tr><th>看板板块</th><th>数据表（sheet）</th><th>关键字段</th></tr></thead>
   <tbody>
-    <tr><td>整体达成 / 三大爆品</td><td>服务产品收入统计</td><td>网点 × 品项 金额矩阵；按【数据来源】列的「合计」求和</td></tr>
-    <tr><td>工单 / 服务量、防火阀占比</td><td>工单明细表</td><td>办事处=L、服务网点=CB、服务工程师=BD、服务完成时间=AP、产品组=BV、工单类型=BN、服务项目=BF</td></tr>
-    <tr><td>增值产品 / 增值配件</td><td>CSM配件表 + 工单自购配件明细</td><td>销售分类=R、数量=S、上缴金额=AB、录入完成时间=AK（自购表：录入完成时间=K）</td></tr>
-    <tr><td>大保养占比 / 清洗保养 / 延保服务</td><td>CSM服务项目表</td><td>大区=A、办事处=B、服务网点=D、服务工程师=F、录入完成时间=H、服务收费项目=N、销售分类=Q、上缴金额=Y</td></tr>
+    <tr>
+      <td>整体达成 / 三大爆品</td><td>服务产品收入统计</td>
+      <td>网点 × 品项 金额矩阵；按【数据来源】列的「合计」列求和</td>
+    </tr>
+    <tr>
+      <td>工单 / 服务量、防火阀占比</td><td>工单表（第 6 个 sheet）</td>
+      <td>⚠️ <b>列序会变，一律按表头名解析</b>（见下）</td>
+    </tr>
+    <tr>
+      <td>增值产品 / 增值配件</td><td>CSM配件（第 3 个 sheet） + 工单自购配件明细</td>
+      <td>销售分类=R、数量=S、上缴金额=AB、录入完成时间=AK<br>（自购表：录入完成时间=K）</td>
+    </tr>
+    <tr>
+      <td>大保养占比 / 清洗保养 / 延保服务</td><td>CSM服务项目</td>
+      <td>大区=A、办事处=B、服务网点=D、服务工程师=F、录入完成时间=H、服务收费项目=N、销售分类=Q、上缴金额=Y</td>
+    </tr>
   </tbody>
 </table>
+
+<div class="tip">
+  <b>⚠️ 工单表列序不固定（2026-09 起出现变更）。</b>9 月版源表在 F–AF 区间增删列，「办事处」从 L 列挪到了 K 列、工程师编号 30→31，
+  若仍写死列号会导致<b>所有办事处变成「（未知办事处）」</b>。做法：用 <code>resolve_cols()</code> <b>按表头名称</b>定位列，缺名才回退历史列号。
+  <br><b>本次（2026-09-26）实测列映射：</b>办事处名称=#10 · 服务网点=#79 · 服务工程师=#55 · 工程师编号=#31 · 工单编号=#53 · 服务完成时间=#41 · 产品组=#73 · 工单类型=#65 · 服务项目=#57。
+  <br>每次更新后<b>必看生成器第一行打印的「列映射」+ 办事处数是否为 6</b>，异常立即排查。
+</div>
 
 <h2 id="s2">二、周期口径</h2>
 <ul>
@@ -78,9 +108,14 @@
     <br>特例：1 月 = 25.12.28–26.1.27；2 月 = 26.1.28–2.25；3 月 = 2.26–3.27；4 月 = 3.28–4.27。
     <br>当前 <b>9 月 = 2026.8.28 – 9.27（31 天）</b>。</li>
   <li><b>服务年</b>：2025.12.28 – 2026.12.27。</li>
-  <li><b>统计截止日</b> = <b>更新日 − 1</b>（D−1 铁律）；若未通知更新，则冻结在上一次截止日、<b>不自动滚动</b>。</li>
-  <li><b>时间进度</b> = 已过天数 ÷ 服务月总天数。例：9/14 → 18 ÷ 31 = <span class="num">58.06%</span>。</li>
+  <li><b>统计截止日 = 更新日 − 1</b>（D−1 铁律）。<b>若未通知更新，则冻结在上一次截止日、不自动滚动。</b>
+    <br>例：9/26 更新 → 截止 9/25。</li>
+  <li><b>时间进度</b> = 已过天数 ÷ 服务月总天数。例：截止 9/25 → 29 ÷ 31 = <span class="num">93.55%</span>。</li>
 </ul>
+<div class="brandbox">
+  <b>⚠️ 服务月归属必须用 <code>service_month_of(d)</code>，不要用 <code>d.year, d.month</code> 直接推。</b>
+  规则：<code>d.day &gt;= 28</code> → 归属到<b>下一个月</b>（如 8/28 属 9 月服务月）。历史上曾因直接取月份把 8/28 误判成 8 月。
+</div>
 
 <h2 id="s3">三、目标口径</h2>
 <ul>
@@ -88,37 +123,41 @@
   <li><b>三大爆品</b> = 清洗保养 + 延保服务 + 清洁耗材（三类<b>合并为 1 个数</b>）。</li>
   <li><b>办事处年目标</b>（合计 ¥495 万）：新疆 187 / 宁夏 124 / 兰州 93 / 包头 39 / 呼和浩特 36 / 西宁 16（单位：万元）。</li>
   <li>达成率 = 实际 ÷ 目标；<b>120% 目标 = 目标 × 1.2</b>。</li>
+  <li>目标在源表里没有，是看板里<b>可编辑</b>的（管理密码 <code>fangtai2026</code>）。</li>
 </ul>
+<div class="tip">
+  <b>⚠️ 目标 <code>_stamp</code> 必须与目标数值同步 bump。</b><code>EMBED_TARGETS_BY_MONTH[月]._stamp</code> 是「浏览器本地存的旧目标」与「HTML 内嵌的新目标」的合并键，<b>新者优先</b>；
+  只改数值不 bump，老端会一直显示 ¥0。注意它与「数据更新于 _stamp」是<b>两个不同字段</b>。
+</div>
 
 <h2 id="s4">四、各模块计算逻辑</h2>
 
 <h3>1. 整体达成（办事处 · 网点明细）</h3>
-<div class="formula">实际合计 = 服务产品收入统计各网点 × 品项金额合计（按【数据来源】列「合计」求和）<br><b>达成率 = 实际合计 ÷ 整体目标</b></div>
+<div class="formula">实际合计 = 服务产品收入统计中 各网点 × 品项 金额合计（按【数据来源】列「合计」求和）<br><b>达成率 = 实际合计 ÷ 整体目标</b></div>
 
 <h3>2. 三大爆品</h3>
 <div class="formula">实际 = 清洗保养 + 延保服务 + 清洁耗材 三项实际合计<br><b>达成率 = 实际 ÷ 三大爆品合并目标</b></div>
 
 <h3>3. 工单 / 服务量</h3>
 <ul>
-  <li>工单数 = 工单明细<b>行数</b>（服务完成时间落在服务月周期内）。</li>
-  <li>支持按 办事处 / 产品组 / 服务项目 / 工单类型 分组查看。</li>
+  <li>工单数 = 工单明细<b>行数</b>（服务完成时间落在服务月周期内，按工单编号去重）。</li>
+  <li>支持按 办事处 / 产品组 / 服务项目 / 工单类型 分组查看（办事处 → 网点 → 工程师 三级下钻）。</li>
 </ul>
 
 <h3>4. 防火阀（止回阀）占比</h3>
 <div class="formula">
 止回阀数量 = CSM配件表中「销售分类 = 止回阀」且「上缴金额 &gt; 0」的 <b>数量(S列)之和</b><br>
-　（仅统计服务月周期内工单对应的止回阀；金额为 0 / 空 / 非数字一律剔除）<br>
+　（金额为 0 / 空 / 非数字一律剔除）<br>
 烟机安装量 = 工单表中「产品组 = 吸油烟机」且「服务项目 ∈ {安装, 改装, 油烟机预埋烟管}」的工单量<br>
 <b>防火阀占比 = 止回阀数量 ÷ 烟机安装量 × 100%</b>
 </div>
-<div class="tip">⚠️ 易错点：止回阀是取 <b>数量列(S)求和</b>，不是行数计数。支持 办事处 / 网点 / 工程师 三维度查看。</div>
-<div class="brandbox">本次版本校验：止回阀数量在 <b>工单</b>（防火阀占比）、<b>增值产品</b>、<b>增值配件</b> 三个模块须完全一致（9 月 = <b>833</b>）。</div>
+<div class="tip">⚠️ 易错点：止回阀取 <b>数量列(S)求和</b>，<b>不是行数计数</b>。支持 办事处 / 网点 / 工程师 三维度查看。</div>
 
 <h3>5. 增值产品</h3>
 <ul>
   <li>源：CSM配件表 + 工单自购配件明细。</li>
-  <li>日期过滤以 <b>「录入完成时间」</b> 为准（CSM配件 AK 列 / 自购 K 列）——注意与工单模块用「服务完成时间」不同。</li>
-  <li>各品项计数；其中 <b>止回阀</b> 走特殊口径（同上第 4 条）。</li>
+  <li>日期过滤以 <b>「录入完成时间」</b> 为准（CSM配件 AK 列 / 自购 K 列）——<b>与工单模块用「服务完成时间」不同</b>。</li>
+  <li>普通品项按「配件编码/名称匹配」计数；其中 <b>止回阀</b> 走特殊口径（同第 4 条）。</li>
   <li>全区总计数 = 各品项计数之和。</li>
 </ul>
 
@@ -126,6 +165,7 @@
 <ul>
   <li>窗口：<b>昨日 / 近 3 日 / 近 7 日 / 当月</b>（以统计截止日为基准回算）。</li>
   <li>各品项计数 + 覆盖工程师数。</li>
+  <li>数据来自<b>按日累积存储</b>（<code>_valueparts_daily.json</code>，结构 <code>months:{月:[{d,k,o,p,s,q}]}</code>），窗口按日期范围从存储里聚合。</li>
 </ul>
 
 <h3>7. 大保养占比</h3>
@@ -141,6 +181,7 @@
   <li>按「服务收费项目」拆年限：含"一年"→ <b>y1</b>、含"两年"→ <b>y2</b>、含"三年"→ <b>y3</b>。</li>
   <li>按「录入完成时间」落在服务月周期内。</li>
   <li>指标：<b>单数 + 上缴金额合计</b>；时间窗口：昨日 / 近 3 日 / 近 7 日（以统计截止日为 cut）。</li>
+  <li><b>排序规则</b>：数量降序 → 数量相同时按金额降序；金额一律保留<b>两位小数</b>。</li>
 </ul>
 
 <h3>9. 清洗保养</h3>
@@ -152,46 +193,176 @@
   <li>主项选择器：全部 / 4 个单项（选单项时明细表只显示数量列）。</li>
 </ul>
 
-<h3>10. 下钻（办事处 → 网点）· 目标差值 KPI</h3>
+<h3><span class="star">★</span> 10. 全区品项分析（环形图 + 条形图 + 查看范围）<span class="star">— 本次重点</span></h3>
+<ul>
+  <li>位置：模块 2「📦 全区各品项分析」。</li>
+  <li><b>环形图</b>：纯 SVG 手绘（<b>无任何外部依赖 / CDN，离线可用</b>）。
+    <ul>
+      <li>扇区按品项<b>实际收入降序</b>排列；中心显示当前范围<b>合计金额</b>。</li>
+      <li>绘制方式：每个扇区是一个 <code>&lt;circle&gt;</code>，用 <code>stroke-dasharray</code> + <code>stroke-dashoffset</code> 画弧，<code>transform="rotate(-90 cx cy)"</code> 从 12 点方向起画。</li>
+      <li>右侧图例 = 色点 + 品项名 + 金额 + 占比（占比两位小数）；爆品带 🔥 标记。</li>
+      <li><b>无收入的品项不绘制扇区</b>，在图例下方以灰字列出「本月无收入，未绘制：…」。</li>
+    </ul>
+  </li>
+  <li><b>查看范围切换</b>（<code>#itemScopeSeg</code>）：<b>全区 + 6 个办事处</b>共 7 个按钮（<code>pieOffice</code> 变量，空串=全区）。
+    <ul>
+      <li>切换后：环形图、图例、条形图、下钻明细<b>全部同步</b>切换口径，文案里「占全区」会变成「占新疆」等。</li>
+      <li>切到某办事处后，下方明细表中<b>该办事处所在行高亮</b>（<code>tr.hlRow</code>）。</li>
+    </ul>
+  </li>
+  <li><b>下钻</b>：点击 环形扇区 / 图例行 / 条形图行 均可，展示「该品项各办事处分布」（实际 + 占该品 + 分布条）。</li>
+  <li><b>品项配色固定</b>：<code>PIE_COLORS</code> 按品项在 <code>ITEMS</code> 中的下标取色（<code>pieColorOf()</code>），
+      保证同一品项在 环形图 / 图例 / 条形图 / 明细 中<b>颜色一致</b>。</li>
+</ul>
+
+<h3>11. 下钻（办事处 → 网点）· 目标差值 KPI</h3>
 <div class="formula">
-距离 100% 差值 = 目标 × 1.0 − 实际<br>
-距离 110% 差值 = 目标 × 1.1 − 实际<br>
-完成 120% 差值 = 目标 × 1.2 − 实际<br>
+距离 100% 差值 = 目标 × 1.0 − 实际　　距离 110% 差值 = 目标 × 1.1 − 实际　　完成 120% 差值 = 目标 × 1.2 − 实际<br>
 <b>剩余每天需完成 = 差值 ÷ 剩余天数</b>（剩余天数 = 服务月天数 − 已过天数）<br>
 <b>日均完成金额 = 实际 ÷ 已过天数</b>
 </div>
 <ul>
   <li>当差值 ≤ 0 时显示「已达成」。</li>
-  <li>着色：按该档达成率（实际 ÷ 目标×档位）呈<b>「近绿远红」渐变</b>（越接近该档目标越绿，越远越红）；已达成固定为绿色。</li>
+  <li>着色见<a href="#s6">第六章</a>（近绿远红渐变）。年度视图下无「剩余天数」概念，这组 KPI 隐藏。</li>
 </ul>
 
-<h3>11. 年度累计视图</h3>
+<h3>12. 年度累计视图</h3>
 <ul>
   <li>1–N 月各月数据合并展示；统计截止日取各月中的最大值。</li>
-  <li>年度目标进度按服务年（12.28–12.27）计算时间进度，与月度进度相互独立。</li>
+  <li>年度目标进度按服务年（12.28–12.27）计算时间进度，与月度进度<b>相互独立</b>（年度目标色用 <code>yearTimeProg()</code>，勿用月度 <code>TIME_PROG</code>）。</li>
 </ul>
 
 <h2 id="s5">五、调平约定</h2>
 <div class="brandbox">
-【数据来源】列中的「<b>网点买断</b>」与「<b>调整（虚拟网点 / 虚拟技师）</b>」<b>原样计入</b>——按「合计」列求和，表里写什么就显示什么，不做剔除。
+【数据来源】列中的「<b>网点买断</b>」与「<b>调整（虚拟网点 / 虚拟技师）</b>」<b>原样计入</b>——按「合计」列求和，表里写什么就显示什么，<b>不做任何剔除</b>。
 </div>
 
-<h2 id="s6">六、配色约定</h2>
+<h2 id="s6">六、配色与显示约定</h2>
 <ul>
-  <li><b>涨红跌绿</b>：红色 = 增长/达成，绿色 = 下降（中国习惯）。</li>
-  <li>目标差值卡：离目标越近越绿、越远越红（HSL 由红到绿渐变）。</li>
+  <li><b>涨红跌绿</b>：红色 = 增长/达成，绿色 = 下降（中国习惯，<b>不要用欧美口径</b>）。</li>
+  <li><b>目标差值卡着色（2026-09-12 增强后，当前逻辑）：</b>
+    <div class="formula">
+      已达成（差值 ≤ 0）→ 固定绿 <code>hsl(140,72%,40%)</code>，底色 <code>hsl(140,70%,93%)</code><br>
+      未达成 → <code>ratio = 实际 ÷ (目标 × 档位)</code>（档位 = 1 / 1.1 / 1.2）<br>
+      　　<code>hue = clamp(0, 120, ratio<sup>1.4</sup> × 120)</code>　← 指数 1.4「调陡」，红区更大、过渡更集中<br>
+      　　文字色 <code>hsl(hue, 90%, 38 + ratio×14 %)</code>　← 高饱和 + 越接近目标越亮<br>
+      　　卡片底色 <code>hsl(hue, 85%, 95%)</code>，并在卡片<b>左侧加 5px 同色色条</b>
+    </div>
+  </li>
+  <li><b>百分比两位小数铁律（2026-09-21 锁定）</b>：全看板百分比一律<b>精确到小数点后两位</b>（<span class="num">18.98%</span>，不写 18.9%、不写 19%）。
+    <br>唯一入口：<code>const pct = x =&gt; (x*100).toFixed(2) + '%';</code>（在 ~851 行，带锁定注释）。
+    <br><b>新增任何百分比显示都必须走 <code>pct()</code></b>；少数不走 pct 的散点（同比 yoy、大保养明细、年度达成率、工程师「占筛选合计」）也必须 <code>toFixed(2)</code>。
+    <br>数据层（各 <code>_gen_*.py</code>）统一 <code>round(x*100, 2)</code>，<b>勿改成 1 位</b>。
+    <br>自检命令：业务行（行长 &lt; 3000）里 grep <code>toFixed(1)</code> 应为 <b>0 命中</b>。</li>
 </ul>
 
-<h2 id="s7">七、更新与同步</h2>
+<h2 id="s7">七、⚠️ 最近改动清单（家里电脑逐条对照补齐）</h2>
+<p>下表是 9/12 – 9/26 期间的全部改动。<b>家里电脑若缺哪条，按「具体做法」补上即可。</b></p>
+<table>
+  <thead><tr><th style="width:88px">日期</th><th style="width:150px">改动</th><th>具体做法</th><th style="width:110px">涉及文件</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>09-12</td>
+      <td>目标差值卡着色增强</td>
+      <td>「离目标越近越绿、越远越红」拉大对比：<code>hue = ratio<sup>1.4</sup>×120</code>（原为线性）、饱和度 90%、亮度随达成度变化、卡片加左侧 5px 色条 + 极淡同色背景。见第六章公式。</td>
+      <td><code>dashboard.html</code><br><code>gapCard</code></td>
+    </tr>
+    <tr>
+      <td>09-13</td>
+      <td>时间窗口<b>跨服务月</b>取数修复</td>
+      <td>延保 / 清洗 / 配件的「昨日 / 近 3 日 / 近 7 日」原先只看当前月 → 月初回看上一服务月末时会缺数。改为<b>先合并 <code>months</code> 下所有月份记录，再按日期筛</b>；当月口径仍只取当前服务月。<br>配件侧改为<b>按日累积存储</b>（<code>_valueparts_daily.json</code>），窗口从存储聚合。</td>
+      <td><code>extTimeWindow()</code><br><code>cleaningRecs()</code><br><code>_gen_valueparts.py</code></td>
+    </tr>
+    <tr>
+      <td>09-19</td>
+      <td>工单表<b>列名解析</b>修复</td>
+      <td>源表列序变更导致「办事处」认错、全部变「（未知办事处）」。新增 <code>COL_FALLBACK</code> + <code>resolve_cols()</code>：<b>按表头名称</b>定位列（缺名才回退历史列号），并打印列映射。</td>
+      <td><code>_gen_workorder.py</code></td>
+    </tr>
+    <tr>
+      <td>09-19</td>
+      <td><span class="star">★</span> 新增「全区品项分析」<b>环形图</b></td>
+      <td>模块 2 增加纯 SVG 环形图（<code>renderItemPie()</code>），显示各品项实际收入占比结构，中心为合计；右侧图例带金额 + 占比；<b>无 CDN 依赖，离线可用</b>。品项配色固定（<code>PIE_COLORS</code> / <code>pieColorOf()</code>）。</td>
+      <td><code>dashboard.html</code><br><code>#itemPie</code></td>
+    </tr>
+    <tr>
+      <td>09-19</td>
+      <td><span class="star">★</span> 环形图「<b>查看范围</b>」切换</td>
+      <td>新增 <code>renderItemScopeSeg()</code> + 变量 <code>pieOffice</code>：可切「全区」或某个办事处，环形图/图例/条形图/明细同步切口径；明细中被选办事处行高亮（<code>tr.hlRow</code>）。扇区 / 图例 / 条形图均可点击下钻。</td>
+      <td><code>dashboard.html</code></td>
+    </tr>
+    <tr>
+      <td>09-21</td>
+      <td>百分比<b>两位小数</b>锁死</td>
+      <td>全局 <code>pct()</code> 由 <code>toFixed(1)</code> 改 <code>toFixed(2)</code>，并修正 6 处手写一位小数的散点。此后任何新增百分比一律两位。</td>
+      <td><code>dashboard.html</code><br>数据层 <code>_gen_*.py</code></td>
+    </tr>
+    <tr>
+      <td>09-26</td>
+      <td>管线 <code>--out</code> 铁律（防静默陷阱）</td>
+      <td>手动跑生成器时<b>必须显式传 <code>--out</code></b>，否则会出现「数字没更新」的假成功。详见第八章。</td>
+      <td>生成管线</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="tip">
+  <b>家里电脑最省事的同步办法：</b>直接拿最新的 <code>dashboard.html</code> <b>整文件覆盖</b>旧文件 ——
+  上面所有改动（含环形图）都在这一个文件里，覆盖即完成同步，不用逐条改代码。
+  本说明文档是给「想核对口径」或「想自己改代码」时用的。
+</div>
+
+<h2 id="s8">八、更新与部署流程</h2>
+
+<h3>8.1 数据更新（推荐：一键封装）</h3>
+<div class="formula">
+<code>_build.py --excel "…2026年X月西北服务产品.xlsx" --date &lt;截止日&gt;</code><br>
+<code>_release.py --excel "…" --date &lt;截止日&gt;</code>　← 再自动加上 构建 → bump → 推送 → 线上校验
+</div>
 <ul>
-  <li><b>统计截止日 = 更新日 − 1</b>，未通知更新则冻结、不自动滚动。</li>
-  <li>每次数据更新后版本号（BUILD）变化；用在线链接查看时需按 <code>Ctrl+Shift+R</code> 硬刷新。</li>
-  <li>离线使用：直接用新版 <code>dashboard.html</code> 覆盖旧文件即完成同步，无需联网。</li>
+  <li><code>--date</code> = <b>数据截止日 = 更新日 − 1</b>（D−1 铁律），脚本据此推导服务月与周期。</li>
+  <li>一键封装内部已按正确文件名生成各中间文件，<b>不要逐条手跑生成器</b>。</li>
+</ul>
+
+<h3>8.2 手动分步（排障用）——<b>每个生成器都必须传 <code>--out</code></b></h3>
+<div class="formula">
+<code>_gen_month.py &lt;excel&gt; --date &lt;cut&gt; --out _month_&lt;YYYY-MM&gt;.json</code>　← <b>注意不是 _month.json！</b><br>
+<code>_gen_workorder.py &lt;excel&gt; --date &lt;cut&gt; --out _mf_&lt;YYYY-MM&gt;_wo.json</code><br>
+<code>_gen_valueadded.py --lo &lt;服务月起&gt; --hi &lt;cut&gt; --excel &lt;excel&gt; --out _mf_&lt;YYYY-MM&gt;_va.json</code><br>
+<code>_gen_valueparts.py --svc-lo &lt;服务月起&gt; --cut &lt;cut&gt; --excel &lt;excel&gt; --month &lt;YYYY-MM&gt; --out _mf_&lt;YYYY-MM&gt;_vp.json</code><br>
+<code>_gen_bigcare.py --excel &lt;excel&gt; --ps &lt;服务月起&gt; --pe &lt;服务月止&gt; --out _mf_&lt;YYYY-MM&gt;_bc.json</code><br>
+<code>_gen_extend_time_months.py --excel &lt;excel&gt; --svc-lo &lt;服务月起&gt; --cut &lt;cut&gt; --month &lt;YYYY-MM&gt;</code><br>
+<code>_gen_cleaning.py --excel &lt;excel&gt;</code><br>
+→ 然后：<code>_merge_9.py</code> → <code>_reinject_monthlyfour.py</code> → <code>_inject_month.py --default-month &lt;YYYY-MM&gt;</code> → <code>_reinject_extendtime.py</code> → <code>_reinject_cleaning.py</code>
+</div>
+
+<div class="tip">
+  <b>⚠️⚠️ 漏传 <code>--out</code> 的两处静默陷阱（2026-09-26 实际踩过，不报错但拿旧数据算）：</b>
+  <ol>
+    <li><code>_gen_month.py</code> 默认写 <code>_month.json</code>，而 <code>_inject_month.py</code> 是 <code>glob("_month_*.json")</code> <b>按文件名取月份</b> → <code>_month.json</code> 根本匹配不上，<code>_month_&lt;月&gt;.json</code> 保持旧值 → <b>D 块与「统计截止日」永不更新</b>。</li>
+    <li><code>_merge_9.py</code> 读的是 <code>_mf_&lt;月&gt;_{wo,va,vp,bc}.json</code> 中间文件，<b>不是</b>生成器默认输出 <code>_workorder.json</code> 等 → 会把旧中间文件再合一遍。</li>
+  </ol>
+  <b>30 秒自检（任一命中即踩坑，别部署）：</b>
+  <br>① <code>_bump_build.py</code> 输出的 <code>version.json</code> 里 <code>cut</code> 仍是<b>旧截止日</b>；
+  <br>② 合并脚本打印的<b>合并前/后 <code>year</code> 工单总数一模一样</b>（正常应增加）；
+  <br>③ <code>dashboard.html</code> 里 grep <code>"统计截止日":"&lt;新日期&gt;"</code> 命中 <b>0</b>。
+</div>
+
+<h3>8.3 部署（三步 / 已长期授权自动同步）</h3>
+<ol>
+  <li><code>_bump_build.py</code>　—— 更新 HTML 里的 BUILD 与 <code>publish_gh/version.json</code>。<b>每次部署必跑</b>，否则客户端 version.json 与 BUILD 自洽 → <b>永不刷新、一直看旧数据</b>。</li>
+  <li>复制 <code>dashboard.html</code> → <code>publish_gh/index.html</code>，并确保 <code>publish_gh/.nojekyll</code> 存在。</li>
+  <li>推送 GitHub Pages + 重跑应用发布（两处链接）。</li>
+</ol>
+<ul>
+  <li>线上：<code>https://mouren2580.github.io/fangtai-dashboard/</code>（看的时候按 <b>Ctrl+Shift+R</b> 硬刷新绕缓存）。</li>
+  <li>应用分享：<code>https://fangtai-service-dashboard.app.workbuddy.host/</code>。</li>
+  <li>发布前校验 <code>publish_gh/index.html</code> 与 <code>dashboard.html</code> 的 sha1 一致。</li>
 </ul>
 
 <footer>
   本说明用于对齐看板各指标的计算口径，随看板版本同步更新。<br>
-  当前版本数据：9 月（截止 2026-09-14）— 工单 13,136 / 防火阀占比 19.02%（止回阀 833 ÷ 烟机安装 4,379）/ 延保 113 单 ¥42,974.90 / 清洗保养 448 单 / 大保养占比 2.67%（12 ÷ 449）/ 整体实际合计 ¥306,777。
+  当前版本（BUILD 20260926-1024，截止 2026-09-25）：整体实际合计 ¥506,662.46（95 网点）｜工单 20,794｜防火阀占比 18.72%｜延保 183 单 ¥68,316.80｜清洗保养 682 单｜大保养占比 2.34%。
 </footer>
 
 </div>
