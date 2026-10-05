@@ -61,10 +61,17 @@
   - **那 4 个 json 是累积状态（1–9 月历史），漏拷会让年度累计数变小。**
 - 家里那套 `_gen_*.py` **不在**办公室工作区（这边是 `build_month.py`+`gen_v2_lib.py`+`gen_month.py`）——**两套独立实现，数据块结构兼容但代码不同**。
 - 新分享链接：`https://fangtai-service-dashboard.app.workbuddy.host`（旧 `0717bc4b...app.workbuddy.link` 已落后，待确认是否弃用）。
-- ⚠️ **办公室 `build_month.py` 把月份写死成 `2026-09`**（`MDATA_2026_09_*`、`mf/et/cl["months"]["2026-09"]` 等）。`svc_start()` 支持任意月（`svc_start(10,2026)=2026-09-28`），但要用它跑 10 月必须先改成动态 `MONTH`。
+- ✅ **2026-10-06 已把办公室 `build_month.py` 改成动态月份**（去掉 10 处 `2026-09` 硬编码 + 新增 `CURRENT_MONTH` 同步），现在与家里那套一样支持任意月。
+
+### 🐞 服务月周期坑（2026-10-06 修）
+旧代码 `end = svc + timedelta(days=30)` **只对 31 天服务月成立**：9 月 8/28+30=9/27 ✅，但 **10 月 9/28+30=10/28 ❌（应为 10/27，共 30 天）**。10 月是第一个 30 天服务月才暴露。
+- 已改为 `service_month(cutoff)`：**`gen_v2_lib.py` 与 `gen_month.py` 各有一份，改一处必须同步另一处**。
+- 规则：每月 28 日及以后归下一个服务月；终点=当月 27 日；跨年 12-28 → 次年 1 月服务月。
+- 连带修正：workorder / bigcare 的「截止日」用实际数据截止日（bigcare 用 `min(cut, end)`），不再错标成服务月末。
 
 ## 五、当前状态（2026-10-06 07:10）
 - BUILD **`20261005-0932`**，**截止 `2026-10-04`**，`CURRENT_MONTH=2026-10`（10 月周期 9.28–10.27，30 天）。**这版是用户 10-5 在家里更新并发布的**；办公室工作区 10-6 已同步追平（旧版备份 `_bak_office_20260927.html`）。45 个 MDATA 块（含 2026_10_* 五个）。
 - 线上：GitHub Pages 与新链接 `fangtai-service-dashboard.app.workbuddy.host` 均为 20261005-0932 ✅；旧 CloudStudio 链接仍是 20260927-0859（落后）。
 - 数据源：`2026年10月西北服务产品.xlsx`（各表最大日期 **2026-10-04**，与线上截止日一致，今日无更新数据）。
-- 待办：办公室 `build_month.py` 月份硬编码 2026-09 未改造；旧 CloudStudio 链接是否弃用待用户确认。
+- 三条链接已全部同步为 20261005-0932 ✅（Pages / `fangtai-service-dashboard.app.workbuddy.host` / 旧 `0717bc4b...link`）。
+- ⚠️ 仍需注意：家里(`run_update.py`+`_gen_*.py`)与办公室(`build_month.py`+`gen_v2_lib.py`)是**两套独立实现**，虽数据块兼容但会各自漂移，**建议以一套为主**。工作区 `2026年10月西北服务产品.xlsx` 的报表快照比家里那次新（工程师 191→192）。
