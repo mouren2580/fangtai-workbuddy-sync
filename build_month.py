@@ -303,10 +303,10 @@ def build(cut):
     build_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     html = re.sub(r'var BUILD = "[^"]+";', 'var BUILD = "%s";' % build_id, html, count=1)
     # 页面默认打开的月份跟着截止日走（原来固定 2026-09，跨月后会停留在旧月份）
-    n_cm = len(re.findall(r'var CURRENT_MONTH = "[^"]+";', html))
+    pat_cm = r'(?:var|let)\s+CURRENT_MONTH\s*=\s*"[^"]+";'
+    n_cm = len(re.findall(pat_cm, html))
     if n_cm:
-        html = re.sub(r'var CURRENT_MONTH = "[^"]+";',
-                      'var CURRENT_MONTH = "%s";' % MONTH, html, count=1)
+        html = re.sub(pat_cm, 'let CURRENT_MONTH = "%s";' % MONTH, html, count=1)
     else:
         print("[warn] 未找到 var CURRENT_MONTH 声明，未更新默认月份")
 
