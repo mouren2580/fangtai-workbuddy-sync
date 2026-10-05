@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""按参考看板逻辑，用新 Excel 重建 2026-09 全部数据块并注入。
+"""按参考看板逻辑，用新 Excel 重建「指定截止日所属服务月」的全部数据块并注入。
+月份由 --cut 动态推导（2026-10 → 服务月 9/28–10/27），不再写死某个月。
 
-  python build_month.py check 2026-09-12     # 校验：全部块与参考对照
-  python build_month.py build 2026-09-14     # 构建：注入并写出
+  python build_month.py check 2026-10-04     # 校验：全部块与参考对照
+  python build_month.py build 2026-10-05     # 构建：注入并写出
 """
 import os, re, sys, json, datetime
 from collections import OrderedDict
@@ -13,7 +14,7 @@ import gen_month as GM
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 底板 = 用户最新的参考看板（每次更新时用新收到的版本覆盖本文件）
 REF = os.path.join(HERE, "dashboard_ref.html")
-EXCEL = os.path.join(HERE, "2026年9月西北服务产品(5).xlsx")
+EXCEL = os.path.join(HERE, "2026年10月西北服务产品.xlsx")
 OUT = os.path.join(HERE, "dashboard_offline.html")
 
 # 需要「保留历史月」的多月份容器块
@@ -107,9 +108,7 @@ def make_extend(rec_et, cut):
 
 
 def make_blocks(cut):
-    MONTH = cut.strftime("%Y-%m")
-    svc = G.svc_start(cut.month, cut.year)
-    end = svc + datetime.timedelta(days=30)
+    MONTH, svc, end = GM.service_month(cut)   # 服务月：上月28日~当月27日（30/31天都对）
 
     G.verify_columns(EXCEL)          # 列序自检：平台导出偶会调整列顺序
     wo = G.build_workorder(EXCEL, cut, True)
@@ -139,19 +138,19 @@ def make_blocks(cut):
          "office": bc4["office"], "net": bc4["net"], "eng": bc4["eng"]}
     B["meta"]["截止日"] = cut.strftime("%Y-%m-%d")
 
-    # --- MONTHLY_FOUR 2026-09（bigcare 版截止日=服务月末，含「周期」）---
+    # --- MONTHLY_FOUR 当月（含「周期」）---
     bc_mf = dict(bc4)
     bc_mf.pop("enc", None)
     bc_mf["meta"] = dict(bc4["meta"])
-    bc_mf["meta"]["截止日"] = end.strftime("%Y-%m-%d")
+    # 截止日 = 实际数据截止日；服务月已走完时取服务月末（取两者较早者）
+    bc_mf["meta"]["截止日"] = min(cut, end).strftime("%Y-%m-%d")
     for k in ("剔除项", "大保养项"):        # MF 版用源表首现序（与 MDATA_*_B 的常量序不同）
         bc_mf["meta"][k] = bc4["enc"][k]
 
-    # 月份内：workorder 的「截止」标签沿用服务月末（与参考一致）
     mf_month = {"workorder": wo, "valueadded": va, "valueparts": vp, "bigcare": bc_mf}
 
     # --- EXTEND_TIME_DATA / CLEANING_DATA ---
-    et = {"months": {"2026-09": rec_et, "2026-08": None}}
+    et = {"months": {MONTH: rec_et}}
     cl_data = {"months": {MONTH: rec_cl},
                "meta": {"来源表": "CSM服务项目", "筛选": "销售分类=清洗保养",
                         "生成": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -159,7 +158,7 @@ def make_blocks(cut):
     return {"D": D, "T": T, "B": B, "W": W, "E": E,
             "mf_month": mf_month, "bc4": bc4,
             "rec_et": rec_et, "rec_cl": rec_cl,
-            "cut": cut, "svc": svc, "end": end}
+            "cut": cut, "svc": svc, "end": end, "month": MONTH}
 
 
 def summary(bl, tag):
@@ -199,8 +198,10 @@ def check(cut):
     print("\n===== 与参考看板逐块对照 =====")
     rf = json.loads(extract(ref, "MONTHLY_FOUR"))
     ok = True
-    for var in ["MDATA_2026_09_D", "MDATA_2026_09_T", "MDATA_2026_09_B", "MDATA_2026_09_W", "MDATA_2026_09_E"]:
-        mine = bl[var[10:]] if var[10:] in bl else None
+    MONTH = bl["month"]
+    TAG = MONTH.replace("-", "_")
+    for var in ["MDATA_%s_D" % TAG, "MDATA_%s_T" % TAG, "MDATA_%s_B" % TAG,
+                "MDATA_%s_W" % TAG, "MDATA_%s_E" % TAG]:
         r = json.loads(extract(ref, var))
         mm = {"D": bl["D"], "T": bl["T"], "B": bl["B"], "W": bl["W"], "E": bl["E"]}[var[-1]]
         same = json.dumps(r, sort_keys=True) == json.dumps(mm, sort_keys=True)
@@ -215,7 +216,7 @@ def check(cut):
                     print("      [%s] ref=%s" % (k, json.dumps(r[k], ensure_ascii=False)[:180]))
                     print("      [%s] min=%s" % (k, json.dumps(mm[k], ensure_ascii=False)[:180]))
     for mod in ["workorder", "valueadded", "valueparts", "bigcare"]:
-        r = rf["months"]["2026-09"][mod]
+        r = rf["months"][MONTH][mod]
         m = bl["mf_month"][mod]
         same = json.dumps(r, sort_keys=True) == json.dumps(m, sort_keys=True)
         ok &= same
@@ -226,13 +227,13 @@ def check(cut):
                     print("      [%s] ref=%s" % (k, json.dumps(r[k], ensure_ascii=False)[:200]))
                     print("      [%s] min=%s" % (k, json.dumps(m[k], ensure_ascii=False)[:200]))
     ret = json.loads(extract(ref, "EXTEND_TIME_DATA"))
-    same = json.dumps(ret["months"]["2026-09"], sort_keys=True) == json.dumps(bl["rec_et"], sort_keys=True)
+    same = json.dumps(ret["months"][MONTH], sort_keys=True) == json.dumps(bl["rec_et"], sort_keys=True)
     ok &= same
-    print("  EXTEND_TIME_DATA 2026-09  %s" % ("IDENTICAL" if same else "DIFFERS"))
+    print("  EXTEND_TIME_DATA %s  %s" % (MONTH, "IDENTICAL" if same else "DIFFERS"))
     rcl = json.loads(extract(ref, "CLEANING_DATA"))
-    same = json.dumps(rcl["months"]["2026-09"], sort_keys=True) == json.dumps(bl["rec_cl"], sort_keys=True)
+    same = json.dumps(rcl["months"][MONTH], sort_keys=True) == json.dumps(bl["rec_cl"], sort_keys=True)
     ok &= same
-    print("  CLEANING_DATA 2026-09     %s" % ("IDENTICAL" if same else "DIFFERS"))
+    print("  CLEANING_DATA %s     %s" % (MONTH, "IDENTICAL" if same else "DIFFERS"))
     print("\n>>> 总体:", "全部一致 ✅" if ok else "存在差异 ⚠")
     return ok
 
@@ -277,21 +278,23 @@ def build(cut):
     bl = make_blocks(cut)
     summary(bl, "build")
 
-    for var, key in [("MDATA_2026_09_D", "D"), ("MDATA_2026_09_T", "T"),
-                     ("MDATA_2026_09_B", "B"), ("MDATA_2026_09_W", "W"),
-                     ("MDATA_2026_09_E", "E")]:
+    MONTH, _, _ = GM.service_month(cut)
+    TAG = MONTH.replace("-", "_")
+    for var, key in [("MDATA_%s_D" % TAG, "D"), ("MDATA_%s_T" % TAG, "T"),
+                     ("MDATA_%s_B" % TAG, "B"), ("MDATA_%s_W" % TAG, "W"),
+                     ("MDATA_%s_E" % TAG, "E")]:
         html = replace_value(html, var, bl[key])
-    # MONTHLY_FOUR：仅替换 2026-09 分支，保留 1-8 月与 year
+    # MONTHLY_FOUR：仅替换当月分支，保留其余月份与 year
     mf = json.loads(extract(html, "MONTHLY_FOUR"))
-    mf["months"]["2026-09"] = bl["mf_month"]
+    mf["months"][MONTH] = bl["mf_month"]
     html = replace_value(html, "MONTHLY_FOUR", mf)
     # EXTEND_TIME_DATA
     et = json.loads(extract(html, "EXTEND_TIME_DATA"))
-    et["months"]["2026-09"] = bl["rec_et"]
+    et["months"][MONTH] = bl["rec_et"]
     html = replace_value(html, "EXTEND_TIME_DATA", et)
     # CLEANING_DATA
     cl = json.loads(extract(html, "CLEANING_DATA"))
-    cl["months"]["2026-09"] = bl["rec_cl"]
+    cl["months"][MONTH] = bl["rec_cl"]
     cl["meta"]["生成"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     cl["meta"]["总记录"] = len(bl["rec_cl"])
     html = replace_value(html, "CLEANING_DATA", cl)
@@ -299,6 +302,13 @@ def build(cut):
     build_id = cut.strftime("%Y%m%d").replace("2026", "2026")  # placeholder
     build_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     html = re.sub(r'var BUILD = "[^"]+";', 'var BUILD = "%s";' % build_id, html, count=1)
+    # 页面默认打开的月份跟着截止日走（原来固定 2026-09，跨月后会停留在旧月份）
+    n_cm = len(re.findall(r'var CURRENT_MONTH = "[^"]+";', html))
+    if n_cm:
+        html = re.sub(r'var CURRENT_MONTH = "[^"]+";',
+                      'var CURRENT_MONTH = "%s";' % MONTH, html, count=1)
+    else:
+        print("[warn] 未找到 var CURRENT_MONTH 声明，未更新默认月份")
 
     open(OUT, "w", encoding="utf-8").write(html)
     vj = {"v": build_id, "cut": cut.strftime("%Y-%m-%d"),
@@ -308,8 +318,9 @@ def build(cut):
 
     # 写后校验：每个块可 JSON 解析
     chk = open(OUT, encoding="utf-8").read()
-    for var in ["MDATA_2026_09_D", "MDATA_2026_09_T", "MDATA_2026_09_B", "MDATA_2026_09_W",
-                "MDATA_2026_09_E", "MONTHLY_FOUR", "EXTEND_TIME_DATA", "CLEANING_DATA"]:
+    for var in ["MDATA_%s_D" % TAG, "MDATA_%s_T" % TAG, "MDATA_%s_B" % TAG,
+                "MDATA_%s_W" % TAG, "MDATA_%s_E" % TAG,
+                "MONTHLY_FOUR", "EXTEND_TIME_DATA", "CLEANING_DATA"]:
         json.loads(extract(chk, var))
     print("\n[OK] 已写入 %s   BUILD=%s  截止=%s" % (OUT, build_id, cut))
     return build_id
@@ -317,7 +328,7 @@ def build(cut):
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "check"
-    ds = sys.argv[2] if len(sys.argv) > 2 else "2026-09-12"
+    ds = sys.argv[2] if len(sys.argv) > 2 else datetime.date.today().strftime("%Y-%m-%d")
     y, m, d = [int(x) for x in ds.split("-")]
     if mode == "check":
         check(datetime.date(y, m, d))

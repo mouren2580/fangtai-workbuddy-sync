@@ -182,6 +182,23 @@ def _svc_start(month, year):
     return datetime.date(year, month - 1, 28)
 
 
+def service_month(cutoff):
+    """按「每月 28 日及以后算进下一个服务月」返回 (月份字符串, 起点, 终点)
+
+    服务月定义：上月 28 日 → 当月 27 日（不是自然月，也不是固定 31 天）。
+      2026-10 服务月 = 2026-09-28 ~ 2026-10-27（30 天）
+      2026-09 服务月 = 2026-08-28 ~ 2026-09-27（31 天）
+    跨年：2026-12-28 及以后归属 2027-01 服务月（2026-12-28 ~ 2027-01-27）。
+    """
+    if cutoff.day >= 28:                                  # 归到下一个服务月
+        y, m = (cutoff.year + 1, 1) if cutoff.month == 12 else (cutoff.year, cutoff.month + 1)
+    else:
+        y, m = cutoff.year, cutoff.month
+    svc = datetime.date(y - 1, 12, 28) if m == 1 else datetime.date(y, m - 1, 28)
+    end = datetime.date(y, m, 27)                         # 当月 27 日（30/31 天都正确）
+    return "%04d-%02d" % (y, m), svc, end
+
+
 def gen_weekly(excel, cutoff, data_cutoff):
     wb = openpyxl.load_workbook(excel, data_only=True, read_only=True)
 
@@ -303,9 +320,8 @@ def gen_weekly(excel, cutoff, data_cutoff):
 
 # ---------------- 主数据（D）----------------  (本次重建)
 def _month_time(cutoff):
-    svc = _svc_start(cutoff.month, cutoff.year)          # 服务月起点（上月28日）
-    end = svc + datetime.timedelta(days=30)              # 当月27日
-    md = (end - svc).days + 1                            # 月度天数（31）
+    _, svc, end = service_month(cutoff)                  # 服务月起点/终点（上月28日~当月27日）
+    md = (end - svc).days + 1                            # 月度天数（30 或 31）
     day = (cutoff - svc).days + 1                        # 截止日所处服务月第几天
     week = (day + 6) // 7
     total_weeks = (md + 6) // 7

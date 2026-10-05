@@ -55,6 +55,22 @@ def _iq(x):
 def svc_start(month, year):
     return datetime.date(year - 1, 12, 28) if month == 1 else datetime.date(year, month - 1, 28)
 
+
+def service_month(cutoff):
+    """按「每月 28 日及以后算进下一个服务月」返回 (月份字符串, 起点, 终点)
+
+    服务月 = 上月 28 日 ~ 当月 27 日（30 或 31 天，不能写成 svc + 30 天）。
+    跨年：12-28 及以后归属次年 1 月服务月。
+    与 gen_month.service_month 为同一实现，改一处请同步另一处。
+    """
+    if cutoff.day >= 28:
+        y, m = (cutoff.year + 1, 1) if cutoff.month == 12 else (cutoff.year, cutoff.month + 1)
+    else:
+        y, m = cutoff.year, cutoff.month
+    svc = datetime.date(y - 1, 12, 28) if m == 1 else datetime.date(y, m - 1, 28)
+    end = datetime.date(y, m, 27)
+    return "%04d-%02d" % (y, m), svc, end
+
 # ---------- 产品定义（12 项，取自参考看板 meta.校验）----------
 VA_PRODUCTS = [
     ("厨小护",         ["1506040100565"], ["厨小护养护四件套-/-象山"]),
@@ -231,12 +247,11 @@ def build_workorder(excel, cutoff, use_cutoff):
             nets_seen.add(net)
             for k in b["techs"]:
                 techs_seen.add(k)
-    _end = svc_start(cutoff.month, cutoff.year) + datetime.timedelta(days=30)
+    _mon, _svc, _end = service_month(cutoff)      # 服务月：上月28日~当月27日
     meta = {
         "来源": "工单表(第6个sheet) + CSM配件表(第3个sheet)",
-        "周期": "%s~%s" % (svc_start(cutoff.month, cutoff.year).strftime("%Y-%m-%d"),
-                          _end.strftime("%Y-%m-%d")),
-        "截止": _end.strftime("%Y-%m-%d"),          # 参考看板标签固定为服务月末
+        "周期": "%s~%s" % (_svc.strftime("%Y-%m-%d"), _end.strftime("%Y-%m-%d")),
+        "截止": cutoff.strftime("%Y-%m-%d"),       # 实际数据截止日（非服务月末）
         "时间口径": "服务完成时间",
         "总工单数": office_cnt and sum(office_cnt.values()),
         "办事处数": len(offices), "网点数": len(nets_seen), "工程师数": len(techs_seen),
@@ -328,7 +343,8 @@ def build_valueadded(excel, cutoff, svc=None):
     meta = {"截止日": cutoff.strftime("%Y-%m-%d"), "月份": cutoff.strftime("%Y-%m"),
             "服务月": "%s ~ %s" % (svc.strftime("%Y-%m-%d"), cutoff.strftime("%Y-%m-%d")),
             "来源表": "CSM配件",
-            "口径": "普通产品按 配件编码=产品编码 计数（服务月内）；止回阀按 销售分类=止回阀 且 上缴金额(AB列)>0 计数（与防火阀占比模块同口径，剔除金额为 0/空/非数字 的止回阀）",
+            "数据口径": "CSM配件表",
+            "口径": "数据口径：CSM配件表。普通产品按 配件编码=产品编码 计数（服务月内）；止回阀按 销售分类=止回阀 且 上缴金额(AB列)>0 计数（与防火阀占比模块同口径，剔除金额为 0/空/非数字 的止回阀）",
             "产品项数": len(products),
             "有销量项数": sum(1 for p in products if p["total"] > 0),
             "全区总计数": int(total) if float(total).is_integer() else round(total, 2),
@@ -475,7 +491,8 @@ def build_valueparts(excel, cutoff, svc=None):
     products.sort(key=lambda x: (-x["qty_month"], -x["qty_last7"], x["name"]))
     meta = {"截止日": cutoff.strftime("%Y-%m-%d"),
             "服务月": "%s ~ %s" % (svc.strftime("%Y-%m-%d"), cutoff.strftime("%Y-%m-%d")),
-            "口径": "普通产品：CSM配件表(配件名称/配件编码 任一匹配) + 工单自购配件明细(物料名称/物料编码 任一匹配)，数量列求和；止回阀：CSM配件表 销售分类=止回阀 且 上缴金额(AB列)>0，数量列求和（与防火阀占比模块同口径，剔除金额为 0/空/非数字 的止回阀）。按服务工程师聚合。",
+            "数据口径": "CSM配件表 + 工单自购配件明细",
+            "口径": "数据口径：CSM配件表 + 工单自购配件明细。普通产品：CSM配件表(配件名称/配件编码 任一匹配) + 工单自购配件明细(物料名称/物料编码 任一匹配)，数量列求和；止回阀：CSM配件表 销售分类=止回阀 且 上缴金额(AB列)>0，数量列求和（与防火阀占比模块同口径，剔除金额为 0/空/非数字 的止回阀）。按服务工程师聚合。",
             "来源表": "CSM配件 + 工单自购配件明细",
             "时间窗口": {"昨日": win["昨日"][0].strftime("%Y-%m-%d"),
                         "近3日": "%s ~ %s" % (win["近3日"][0].strftime("%Y-%m-%d"), win["近3日"][1].strftime("%Y-%m-%d")),
@@ -560,10 +577,10 @@ def build_bigcare4(excel, cutoff, use_cutoff):
 
     excl_o = [x for x in enc if x in EXCLUDE] + [x for x in EXCLUDE if x not in enc]
     big_o = [x for x in enc if x in BIG] + [x for x in BIG if x not in enc]
-    end = svc_start(cutoff.month, cutoff.year) + datetime.timedelta(days=30)
+    _, _svc_bc, end = service_month(cutoff)      # 服务月终点（当月27日）
     meta = {"截止日": (cutoff if use_cutoff else end).strftime("%Y-%m-%d"),
             "来源表": "CSM服务项目",
-            "周期": "%s~%s" % (svc_start(cutoff.month, cutoff.year).strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")),
+            "周期": "%s~%s" % (_svc_bc.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")),
             "清洗保养总单": t_clean, "剔除项": list(EXCLUDE), "大保养项": list(BIG),
             "分母": td, "大保养总数": t_big,
             "全区占比": round(t_big / td * 100, 2) if td else 0.0}
