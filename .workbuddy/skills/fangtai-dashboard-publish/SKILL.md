@@ -81,6 +81,7 @@ import json,datetime;print(json.dumps({'v':'YYYYMMDD-HHMM','cut':'2026-09-14','t
    - **必须用户在本轮明确同意**才能覆盖线上链接（工具强约束，先问一句）
    - ⚠️ 报 `应用预留域名 ... 未绑定到本次发布环境` 是**假失败**：内容通常已发布。用 `curl -s https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.json` 验证，返回新 BUILD 即成功，不要把报错原样转述给用户当失败
    - 传 `updateExistingApp:true` 可能因「工作区无现有 app 记录」报错，直接去掉该参数重试
+   - ⚠️ **新链接 `fangtai-service-dashboard.app.workbuddy.host` 办公室这边覆盖不了**：它是家里那台机器建的 app，这边用同前缀部署只会新建带随机后缀的域名（`…-66565.app.workbuddy.host`），原链接不动。要更新只能在家里那台机器再发一次；或让同事看 Pages / 旧 `.link`。
 3. **两个备份仓**
    ```bash
    export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
@@ -99,7 +100,10 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 两边 `v` 应等于新 BUILD；必要时再抓页面印证具体改动（如 `grep -o "const pct = x => (x\*100)\.toFixed(2)"`）。GitHub Pages 构建需 1–3 分钟，刚推完立刻查可能是旧版。
 
 # 相关：新 Excel 数据更新流程（数据类改动走这条）
-**截止日铁律**：**截止日 = 更新日前一天**（如 9-16 更新 → 2026-09-15）。服务周期 上月28日→当月27日（9 月 = 8.28–9.27，共 31 天）。
+**截止日铁律**：**截止日 = 更新日前一天**（如 10-06 更新 → 2026-10-05）。
+**服务周期**：上月 28 日 → 当月 27 日。⚠️ **天数不固定**：9 月 8.28–9.27 = 31 天，但 **10 月 9.28–10.27 = 30 天**（取决于上月的天数）。
+→ 已统一为 `service_month(cutoff)`（`gen_v2_lib.py` 与 `gen_month.py` **各一份，改一处必须同步另一处**），规则「每月 28 日及以后归下一个服务月；终点 = 当月 27 日；跨年 12-28 → 次年 1 月服务月」。
+→ 🐞 旧代码 `end = svc + timedelta(days=30)` 只对 31 天服务月成立，10 月是第一个 30 天服务月才暴露（算出 9/28–10/28）。若再看到周期多一天，就是这里。
 
 1. **先确认真实截止日**：别直接信"更新日−1"，扫一下 Excel 各表日期列最大值（工单 col41 / CSM服务项目 col7 / CSM配件 col36 / 工单自购配件明细 col10，0 基索引），两者应吻合。
    ⚠️ **列序坑（2026-09-18 踩过）**：平台导出**会调整列顺序**。上次「工单」表把 `办事处名称` L(11)→K(10)、`工程师编号` AE(30)→AF(31)，硬编码列号导致办事处名读空、技师编码读成「已支付」，**数量对、归属全错且不报错**。
@@ -117,7 +121,10 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
    - 只报「真实差异」，把「明细行序不同」单独归类（明细表按源表行序，跨 Excel 文件本就不可复现，不算错）；
    - 预期结论：`workorder`/`valueadded`/`W` 完全一致；`valueparts`/`bigcare`/`B`/`E`/`EXTEND_TIME_DATA`/`CLEANING_DATA` 仅顺序不同；**只有 `D`/`T` 有真实差异且属正常**（二者取「报表全量」、不过滤日期，换快照必变）。
 4. `"$PY" build_month.py build <新截止日>` → 输出 summary + 新 BUILD（写入 `dashboard_offline.html` 与 `version.json`）。
-   **自洽校验**：工单总数增量应 ≈ 新增天数的工单行数之和（如 9-15→9-17 的 682+755=1437）。
-5. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`(1–8月)+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
-   并核对 `MDATA_*` 声明数量（当前 40 个）与 8 月基准块（8 月清洗 788 条、延保 139 条）。校验完删除 `_prev.html`。
+   **自洽校验**：工单总数应 = Excel 工单表有效日期总行数（扫日期列即可，10 月实测 5,214 = 5,214 ✅）。
+   ⚠️ 若打印 `[warn] 未找到 var CURRENT_MONTH 声明`：页面里是 `let CURRENT_MONTH`（非 `var`），脚本正则已改为 `(?:var|let)`，改完就不会再出现；出现说明页面默认月份没跟着跨月，要修。
+5. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
+   并核对 `MDATA_*` 声明数量（**10 月起为 45 个**）与基准块（8 月清洗 788 条、延保 139 条；9 月清洗 728、延保 192）。校验完删除 `_prev.html`。
+   再抽样确认新功能还在：`.iPieScope`/`id="itemPie"`/`PIE_COLORS`/`renderItemPie`/`锁定规则 2026-09-21`/`toFixed(2) + '%'`。
 6. 同步 4 份副本 + version.json（见上文），再走发布三步。
+   ⚠️ **`dashboard_ref.html` 不要同步成新版**：它是下次 check 的对照底板，只在用户发来新版 dashboard 时才覆盖。
