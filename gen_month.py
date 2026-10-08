@@ -265,10 +265,20 @@ def gen_weekly(excel, cutoff, data_cutoff):
         net[wk][nm]["total"] += amt
         add_map(nm, off)
     # 清洁耗材 : CSM配件
-    # 注意：CSM配件表 col0 是「大区」而非「办事处」，不能用于登记 网点→办事处 映射
-    #（否则 WMS 网点买断行会被错误归到大区名下；与参考看板一致：映射只取自 CSM服务项目）
+    # ⚠️ CSM配件表表头序是 大区/服务中心/办事处/服务网点 —— col0 是「大区」不是「办事处」！
+    #    早期版本误用 col0，导致周数据多出一个假的「西北大区部」办事处并吸走全部清洁耗材金额。
+    #    现按表头名定位「办事处」列（找不到才回退 col2），并做「必须以办事处结尾」兜底。
     ws = find_sheet("CSM配件")
-    for r in list(ws.iter_rows(values_only=True))[2:]:
+    rows = list(ws.iter_rows(values_only=True))
+    hdr = rows[1] if len(rows) > 1 else []
+    def _col(name, dflt):
+        for i, h in enumerate(hdr or []):
+            if str(h or "").strip() == name:
+                return i
+        return dflt
+    PJ_OFF = _col("办事处", 2)
+    PJ_NET = _col("服务网点", 3)
+    for r in rows[2:]:
         if g(r, 17) != "清洁耗材":
             continue
         dt = _date(g(r, 36))
@@ -277,8 +287,12 @@ def gen_weekly(excel, cutoff, data_cutoff):
         wk = week_key(dt)
         if not wk:
             continue
-        off = g(r, 0) or "—"
-        nm = g(r, 3) or "未命名网点"
+        off = (g(r, PJ_OFF) or "").strip() or m2o.get(g(r, PJ_NET)) or "—"
+        if not str(off).endswith("办事处"):        # 兜底：再取到大区/服务中心就用映射，否则记「—」
+            off = m2o.get(g(r, PJ_NET), "—")
+        if off.endswith("办事处"):
+            add_map(g(r, PJ_NET), off)             # 该表映射现已可靠，可用于 WMS 买断行归属
+        nm = g(r, PJ_NET) or "未命名网点"
         amt = _num(g(r, 27))
         office[wk][off]["清洁耗材"] += amt
         office[wk][off]["total"] += amt
