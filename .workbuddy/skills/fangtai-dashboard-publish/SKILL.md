@@ -105,10 +105,12 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 → 已统一为 `service_month(cutoff)`（`gen_v2_lib.py` 与 `gen_month.py` **各一份，改一处必须同步另一处**），规则「每月 28 日及以后归下一个服务月；终点 = 当月 27 日；跨年 12-28 → 次年 1 月服务月」。
 → 🐞 旧代码 `end = svc + timedelta(days=30)` 只对 31 天服务月成立，10 月是第一个 30 天服务月才暴露（算出 9/28–10/28）。若再看到周期多一天，就是这里。
 
-1. **先确认真实截止日**：别直接信"更新日−1"，扫一下 Excel 各表日期列最大值（工单 col41 / CSM服务项目 col7 / CSM配件 col36 / 工单自购配件明细 col10，0 基索引），两者应吻合。
+1. **先确认真实截止日**：别直接信"更新日−1"，扫一下 Excel 各表日期列最大值（工单 col41 / CSM服务项目 col7 / CSM配件 col36 / 工单自购配件明细 col10，0 基索引）。
+   ⚠️ **各表截止日可能不一致（2026-10-08 踩到）**：那次 `工单`/`CSM配件`/`工单自购配件明细` 已到 10-07，而 **`CSM服务项目` 停在 10-05**（该表未刷新，行数与前一次完全相同）。后果是**大保养 B / 清洗保养明细 / 延保明细 三块停在 10-05**，其余模块到 10-07。
+   → 处理：**按主表（工单）的最大日期定截止日**，但必须**如实告知用户哪几块滞后**，别让人以为全量都到最新。
+   → 判断某表是否刷新：比对该表总行数与上次扫描是否相同（本次 CSM服务项目 1,690 = 1,690）。
    ⚠️ **列序坑（2026-09-18 踩过）**：平台导出**会调整列顺序**。上次「工单」表把 `办事处名称` L(11)→K(10)、`工程师编号` AE(30)→AF(31)，硬编码列号导致办事处名读空、技师编码读成「已支付」，**数量对、归属全错且不报错**。
-   → 现已改为按表头名解析（`gen_v2_lib._cols` + `WO_HEADERS`/`ZG_HEADERS`），`build_month.make_blocks()` 开头还会跑 `G.verify_columns(EXCEL)` 自检其余固定列号。
-   → **仍要看 summary 的数字是否合理**（办事处数应为 6、网点 ~98、工程师 ~238），异常就先去核对表头。
+   → 现已改为按表头名解析（`gen_v2_lib._cols` + `WO_HEADERS`/`ZG_HEADERS`），`build_month.make_blocks()` 开头还会跑 `G.verify_columns(EXCEL)` 自检其余固定列号。看 `[OK] 列序自检通过` 才算过。
 2. **留一份上一版做对照**（关键，别忘）：
    ```bash
    cp dashboard_offline.html _prev.html        # build 会覆盖 dashboard_offline.html
@@ -117,9 +119,14 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 3. `"$PY" build_month.py check <上一次的截止日>` —— 用新 Excel 按旧截止日重算，**与上一次 build 的 summary 数字对比**（工单数、止回阀、延保条数、清洗条数、大保养）。
    一致 ⇒ 历史数据无修订、解析器正常；不一致 ⇒ 逐项查是补录还是解析异常。
    ⚠️ check 的"与参考看板逐块对照"是拿 `dashboard_ref.html` 比的，而 REF 往往停在更早的截止日，**满屏 DIFFERS 属预期**，不能当异常。
-   ✅ **更严格的做法：语义比对**（比 summary 数字可靠得多）——把重算结果与 `_prev.html` 逐叶子比对，列表按**递归多重集**比较：
-   - 只报「真实差异」，把「明细行序不同」单独归类（明细表按源表行序，跨 Excel 文件本就不可复现，不算错）；
-   - 预期结论：`workorder`/`valueadded`/`W` 完全一致；`valueparts`/`bigcare`/`B`/`E`/`EXTEND_TIME_DATA`/`CLEANING_DATA` 仅顺序不同；**只有 `D`/`T` 有真实差异且属正常**（二者取「报表全量」、不过滤日期，换快照必变）。
+   ✅ **更严格的做法：语义比对**（比 summary 数字可靠得多）——`_check_diff915.py` 把重算结果与上一版逐叶子比对，列表按**递归多重集**比较：
+   - **先改对脚本参数**：`CUT = <上一次的截止日>`，`prev = _prev.html`（**同截止日的上一版 build**）。
+     🐞 **别指向 `dashboard_ref.html`**（底板截止日更早）→ 会满屏「真实差异」，白排查一轮。
+     🐞 **改脚本后必须 `grep` 确认落盘**：用 python 字符串 replace 改脚本时，若只 `print` 一段硬编码文字，会掩盖替换失败（2026-10-08 踩到）。
+   - 只报「真实差异」，把「明细行序不同」单独归类（明细表按源表行序，跨 Excel 文件本就不可复现，不算错）。
+   - 预期结论：`B`/`W`/`E`/`workorder`/`valueadded`/`valueparts`/`bigcare`/`EXTEND_TIME_DATA`/`CLEANING_DATA` **全部一致**；
+     **只有 `D`/`T` 有真实差异且属正常**（二者取「报表全量」、不过滤日期，换快照必变，表现为网点数/工程师人数/合计金额增长）。
+   - 注：脚本对「标量数组」（如 `剔除项`/`大保养项`/`code[]`）按索引比，会把**首现序**差异误报为真实差异——这两类属预期。
 4. `"$PY" build_month.py build <新截止日>` → 输出 summary + 新 BUILD（写入 `dashboard_offline.html` 与 `version.json`）。
    **自洽校验**：工单总数应 = Excel 工单表有效日期总行数（扫日期列即可，10 月实测 5,214 = 5,214 ✅）。
    ⚠️ 若打印 `[warn] 未找到 var CURRENT_MONTH 声明`：页面里是 `let CURRENT_MONTH`（非 `var`），脚本正则已改为 `(?:var|let)`，改完就不会再出现；出现说明页面默认月份没跟着跨月，要修。
@@ -128,3 +135,4 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
    再抽样确认新功能还在：`.iPieScope`/`id="itemPie"`/`PIE_COLORS`/`renderItemPie`/`锁定规则 2026-09-21`/`toFixed(2) + '%'`。
 6. 同步 4 份副本 + version.json（见上文），再走发布三步。
    ⚠️ **`dashboard_ref.html` 不要同步成新版**：它是下次 check 的对照底板，只在用户发来新版 dashboard 时才覆盖。
+   ⚠️ **备份仓提交后别只看 `git commit` 的回显**：沙箱外视图可能滞后，显示 `nothing to commit` 而实际已提交成功。以 `git rev-parse --short HEAD` / `git log --oneline -1` 为准；若确实 `nothing to commit` 且 HEAD 未变，等几秒重跑 `git status` 再提交。
