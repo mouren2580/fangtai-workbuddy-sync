@@ -243,6 +243,26 @@ def gen_weekly(excel, cutoff, data_cutoff):
     def g(r, c):
         return r[c] if c < len(r) else None
 
+    # 网点→办事处 预建映射（CSM配件表）
+    # 少数网点在 CSM服务项目 里「办事处」字段为空或误填成「XX服务中心」，
+    # 只靠那张表会把它们归成「—」。CSM配件表的「办事处」列可靠，先铺一层底。
+    try:
+        _ws = find_sheet("CSM配件")
+        _rp = list(_ws.iter_rows(values_only=True))
+        _hd = _rp[1] if len(_rp) > 1 else []
+        def _c(name, dflt):
+            for i, h in enumerate(_hd or []):
+                if str(h or "").strip() == name:
+                    return i
+            return dflt
+        _o, _n = _c("办事处", 2), _c("服务网点", 3)
+        for _r in _rp[2:]:
+            _off = str(g(_r, _o) or "").strip()
+            if _off.endswith("办事处"):
+                add_map(str(g(_r, _n) or "").strip(), _off)
+    except Exception:
+        pass
+
     # 清洗保养 / 延保服务 : CSM服务项目
     ws = find_sheet("CSM服务项目")
     for r in list(ws.iter_rows(values_only=True))[2:]:
@@ -255,7 +275,9 @@ def gen_weekly(excel, cutoff, data_cutoff):
         wk = week_key(dt)
         if not wk:
             continue
-        off = g(r, 1) or "—"
+        off = (str(g(r, 1) or "").strip() or m2o.get(g(r, 3)) or "—")
+        if not str(off).endswith("办事处"):
+            off = m2o.get(g(r, 3)) or off      # 取到服务中心/大区时用映射兜底
         nm = g(r, 3) or "未命名网点"
         amt = _num(g(r, 24))
         office[wk][off][cls] += amt

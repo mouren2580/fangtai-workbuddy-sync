@@ -44,6 +44,19 @@ import json,datetime;print(json.dumps({'v':'YYYYMMDD-HHMM','cut':'2026-09-14','t
 ```
 写入 `version.json` 和 `deploy_cs/version.json`（页面 `fetch('version.json')` 比对 BUILD 做缓存穿透，字段名是 `v`/`cut`/`t`，**不是** `version`/`cutoff`）。
 
+### 🐞 缓存穿透失效：手机一直显示几个月前的旧页面（2026-10-16 修）
+症状：用户反馈「手机打开链接显示到 8 月」。先确认**服务端没问题**（`curl <链接> | grep -o 'var BUILD = "[^"]*"\|let CURRENT_MONTH = "[^"]*"'` 均为最新），
+那必然是手机端缓存的旧 HTML 没被换掉。
+- 根因：旧实现用 `sessionStorage` 计数兜底防死循环——`var n=parseInt(sessionStorage.getItem('_cbN')||'0',10); if(n>=2) return;`。
+  **微信/QQ 内置浏览器的 sessionStorage 常长期不清除**，次数耗尽后 `return` 直接退出，缓存穿透**永久失效**，之后每次数据更新手机都看不到。
+- 修复：改成**按版本号去重**（`localStorage['_cbTried']`）——每个新版本只自动重载一次；同一版本已尝试过仍不一致才提示人工刷新，既不死循环也不卡死。
+  另加了红色提示条兜底：`发现新版 xxx（当前显示 yyy）→ 点此刷新`。
+- 这段代码在 `/*__CACHEBUST_START__*/ … /*__CACHEBUST_END__*/` 块里，**改它必须 4 份 HTML 一起改（含 `dashboard_ref.html` 底板）**，
+  否则下次 `build_month.py build` 会把底板里的旧实现覆盖回来。各份文件的 `var BUILD` 值不同，Edit 时 old_string 要带各自的 BUILD。
+- 改完自检：`grep -o 'var BUILD = "[^"]*"' dashboard_offline.html dashboard.html deploy_cs/index.html dashboard_ref.html` 四份应一致；
+  JS 语法可用 node 校验：提取该 script 段到临时 `.js` 再 `node --check`（注意用 `src.rindex('<script>', 0, i)` 限定在前缀内，
+  写成 `rindex('<script>', i)` 会搜到 CACHEBUST_END 之后的 script，切出空串）。
+
 # 百分比显示规范（用户要求：全部两位小数）
 - 全局格式化函数：`const pct = x => (x*100).toFixed(2) + '%';`（一行改动覆盖达成率/时间进度/进度偏差/占比等大多数显示位）
 - 其余用 `.toFixed(1)+'%'` 直出的点（看过板版本可能行号漂移）：
