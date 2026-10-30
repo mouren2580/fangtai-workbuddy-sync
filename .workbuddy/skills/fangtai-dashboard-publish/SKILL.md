@@ -155,7 +155,7 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
    **自洽校验**：工单总数应 = Excel 工单表有效日期总行数（扫日期列即可，10 月实测 5,214 = 5,214 ✅）。
    ⚠️ 若打印 `[warn] 未找到 var CURRENT_MONTH 声明`：页面里是 `let CURRENT_MONTH`（非 `var`），脚本正则已改为 `(?:var|let)`，改完就不会再出现；出现说明页面默认月份没跟着跨月，要修。
 5. **历史月回归校验**（换底板/换 Excel 后必做，防历史月丢失）：用 `build_month.extract()` 逐月比 `MONTHLY_FOUR.months`+`year`、`EXTEND_TIME_DATA.months`、`CLEANING_DATA.months`，
-   并核对 `MDATA_*` 声明数量（**10 月起为 45 个**）与基准块（8 月清洗 788 条、延保 139 条；9 月清洗 728、延保 192）。校验完删除 `_prev.html`。
+   并核对 `MDATA_*` 声明数量（**10 月 45 个、11 月起 50 个；每多一个月 +5**）与基准块（8 月清洗 788 条、延保 139 条；9 月清洗 728、延保 192）。校验完删除 `_prev.html`。
    再抽样确认新功能还在：`.iPieScope`/`id="itemPie"`/`PIE_COLORS`/`renderItemPie`/`锁定规则 2026-09-21`/`toFixed(2) + '%'`。
 6. 同步 4 份副本 + version.json（见上文），再走发布三步。
    ⚠️ **`dashboard_ref.html` 不要同步成新版**：它是下次 check 的对照底板，只在用户发来新版 dashboard 时才覆盖。
@@ -194,3 +194,33 @@ git show <上次commit>:"2026年10月西北服务产品.xlsx" > _old.xlsx
 - 已加 **CSM配件 预建映射**（该表办事处列可靠）：在 `m2o` 定义后、CSM服务项目 循环前先铺一层底；
   并把 CSM服务项目 的 `off` 改为「不以『办事处』结尾就用 `m2o` 兜底」。
 - 验证：`chk_w_off.py` 的 net 异常网点数应为 0，且**周合计金额不变**（只改归属）。
+
+### 🐞 跨月构建：新月份没有数据块 / 上个月被底板旧快照覆盖（2026-10-30 修，两个必看坑）
+第一次跑到「库里还没有的月份」时会连踩两个坑，且**都不会报错**（第二个甚至数据看起来正常）。
+
+**坑 1：新月份根本没有 `MDATA_*` 块**
+`build()` 用 `replace_value()` 只会替换**已存在**的声明，`MDATA_2026_11_D` 不存在就直接 `SystemExit: 未找到声明`。
+- 已改为「有则替换、无则插到首个 MDATA 声明之前」（必须在前，否则 `MONTH_DATA` 引用时未定义）。
+- 还要往 `MONTH_DATA` 补一行映射——`ensure_month_data()` 会做。**下拉框选项是 `Object.keys(MONTH_DATA).sort()` 动态生成的**，补上就自动多出该月，不用改 HTML。
+
+**坑 2：上个月被静默退回底板的旧快照（最危险）**
+`merge_retained()` 旧逻辑只「补缺月」：月份已存在就保留 `dashboard_ref.html` 的。而 REF 往往停在更早截止日
+（实测 REF 的 2026-10 只有 **4,629 单/10-04**，线上是 **16,475 单/10-20**）。
+- 在**当月内部**更新时看不出来（当月稍后会被新数据覆盖），**一旦跨到新月份，上个月就整块退回旧快照**，页面无声丢数。
+- 已改为 **prev（上一版 build）优先覆盖**，REF 只补 prev 没有的月份/块；`MONTHLY_FOUR.year` 也取 prev 的。
+- **回归必检**：`verify_build.py` 会逐月比对 `_prev.html`，`MONTHLY_FOUR`/`EXTEND_TIME_DATA`/`CLEANING_DATA`/全部 MDATA 块
+  **差异必须为 0**，有差异说明又退回去了。
+
+**跨月后必做浏览器实测**（静态校验查不出运行时问题）：
+```bash
+"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --disable-gpu \
+  --virtual-time-budget=8000 --dump-dom "file:///D:/WorkBuddy/dashboard_offline.html" > _dom.html 2> _dom.err
+```
+在 `_dom.html` 里核对：`id="monthBadge"` 是新月、`id="weekBadge"` 是「第1周/共N周」、KPI 里的工单数/达成率不为 0/NaN；
+`_dom.err` 里出现 `Uncaught` 才算真报错（Chromium 的 QQBrowser/importer 之类 ERROR 可忽略）。**用完删除 `_dom.html`**（几 MB，别提交）。
+
+**换月时另外要提醒用户的两件事**（源数据限制，不是算错）：
+- 新月份那份 Excel 只含「本月服务月」的数据（如 11 月导出只有 10-28 起的 2 天），**上个月最后几天的补数不在里面**。
+  若上次更新停在上月中旬（如 10 月只到 10-20），就要让用户**另外导一份上月（9.28–10.27）**，否则上月永远缺那几天。
+- `MONTHLY_FOUR.year`（年度累计）是固定快照，**无法由单月 Excel 重算**；`LASTYEAR_BY_MONTH[新月份]` 会由 `seedLastYear()` 补空，
+  同比列显示 0/空，需在「设置去年同期」里补去年同月数据。
