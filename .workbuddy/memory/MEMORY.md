@@ -1,96 +1,46 @@
-# 项目长期记忆（方太西北服务产品月报 / WorkBuddy 工作区）
+# 项目长期记忆（方太西北服务产品月报 / D:\WorkBuddy）
 
-> 详细操作步骤已固化为技能：`D:\WorkBuddy\.workbuddy\skills\fangtai-dashboard-publish\SKILL.md`（改数据/改样式/发布四端 SOP）。本文件只记「事实、口径、坑、当前状态」。
+> 操作步骤 SOP 见技能：`D:\WorkBuddy\.workbuddy\skills\fangtai-dashboard-publish\SKILL.md`。本文件只记「事实、口径、坑、当前状态」。
 
-## 一、仓库与推送（3 个远端）
-- **备份仓**：Gitee `git@gitee.com:xbftsjkb/fangtai-workbuddy-sync.git`（远程名 `origin`，私有一份）＋ GitHub `git@github.com:mouren2580/fangtai-workbuddy-sync.git`（远程名 `github`，**仍 Public，建议用户改 Private**）。
-- **Pages 站**：`https://mouren2580.github.io/fangtai-dashboard/`，源 `git@github.com:mouren2580/fangtai-dashboard.git`（根目录 `main`）。**这是分享给同事的主链接，每次更新必须同步**。
-- **认证**：GitHub 全部走 SSH `~/.ssh/id_ed25519_github`（同一把钥匙用于 Pages 仓与备份仓）；Gitee 用 `~/.ssh/id_ed25519_gitee`。**PAT 已全部失效，别再折腾 PAT。**
-- **任何读 `~/.ssh` 的 git 操作都要 `dangerouslyDisableSandbox: true`**；`push_gh_pages.py` 不能后台跑（SSH 会挂死），必须前台。
-- ⚠️ Gitee 单文件 100MB 硬限制；`git add -A` 前确认无大中间产物。`.gitignore` 已含 `models/`、`*.bin`、`2026-09-12-20-12-51/`、`_prev*.html`、`_check_*.py`、`_bak_*`。
-- 流程：改数据 → `git push origin main` + `git push github main` → `python push_gh_pages.py`。
+## 一、仓库与发布（4 端）
+- **Pages（同事主链接，优先保证）**：`https://mouren2580.github.io/fangtai-dashboard/`，源 `git@github.com:mouren2580/fangtai-dashboard.git`，用 `push_gh_pages.py`（**前台跑，不能后台**，SSH 会挂死）。
+- **备份仓双推**：Gitee `origin`（私有）＋ GitHub `github`（仍 Public）。认证全走 SSH `~/.ssh/id_ed25519_github` / `_gitee`，**PAT 已失效**。任何读 `~/.ssh` 的 git 操作都要 `dangerouslyDisableSandbox:true`。
+- **CloudStudio**：目录 `deploy_cs`，旧链 `https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`。报「预留域名未绑定…本次发布已停止」= **假失败**，curl `version.json` 验证即可。
+- **家里 host**：`fangtai-service-dashboard.app.workbuddy.host` —— 家里机器建的，办公室**覆盖不了**，只能用户在家重发。
+- ⚠️ Gitee 单文件 100MB；`git add -A` 前删掉临时大文件（如 `_old_*.xlsx`）。
 
 ## 二、看板架构（单文件 HTML）
-- 多月份：顶层 `MDATA_YYYY_MM_{D,T,B,W,E}`（D 主数据/T 工程师/B 大保养/W 周数据/E 延保）；`BASE_MONTH="2026-08"` 锚点（8 月用基准块 `DASHBOARD_DATA/TECH_DATA/BIG_CARE_DATA/WEEKLY_DATA/EXTEND_WARRANTY_DATA`，故**无 `MDATA_2026_08_*` 属正常**）；`CURRENT_MONTH` 默认 `2026-09`。
-- 另有全局块：`MONTHLY_FOUR.months[月].{workorder,valueadded,valueparts,bigcare}`、`.year`（1–8 月累计，**当月 Excel 无历史数据、不可重算，保持原样**）、`EXTEND_TIME_DATA.months[月]`（延保明细）、`CLEANING_DATA.months[月]`（清洗保养明细）、`VALUE_ADDED_DATA`/`VALUE_PARTS_DATA`/`WORKORDER_DATA`。
-- 缓存穿透：页面 `fetch('version.json')` 比 BUILD；用户按 **Ctrl+Shift+R** 硬刷新。`?newPanel=true` 之类查询参数无效。
-- **同一份看板 4 个副本**：`dashboard_offline.html`（源）/ `dashboard.html`（离线交付）/ `deploy_cs/index.html`（CloudStudio）三者 md5 应一致；`dashboard_ref.html` 是 `build_month.py` 的**底板**（存用户参考版数据），**改样式/JS 也要写进它，否则下次 build 会被覆盖回旧样式**；但**数据更新不要写它**。
+- 数据块：顶层 `MDATA_YYYY_MM_{D,T,B,W,E}`；`BASE_MONTH="2026-08"` 锚点（8 月用基准块，故**无 `MDATA_2026_08_*` 属正常**）；`CURRENT_MONTH` 控制默认月。
+- 全局块：`MONTHLY_FOUR.months[月].{workorder,valueadded,valueparts,bigcare}` + `.year`（1–8 月累计，不可重算）、`EXTEND_TIME_DATA`、`CLEANING_DATA`、`VALUE_ADDED/PARTS_DATA`、`WORKORDER_DATA`。
+- **4 份副本**：`dashboard_offline.html`（源）/ `dashboard.html` / `deploy_cs/index.html` 三者 md5 必须一致；`dashboard_ref.html` 是 build 的**底板**——**改样式/JS 必须同步写它**，但**数据更新不要写它**（留作 check 对照）。
+- 缓存穿透：页面 `fetch('version.json')` 按版本号去重（`localStorage._cbTried`，非 sessionStorage 计数）+ 红色提示条兜底。
 
-## 三、数据工具链
-- **入口 `build_month.py`**（顶部 `EXCEL` 指向当月 Excel、`REF` → `dashboard_ref.html`）：
-  - `python build_month.py check <截止日>`：按该截止日重算并与底板逐块对照（底板数据是旧截止日，故 DIFFERS 属正常，看 summary 数字）；
-  - `python build_month.py build <截止日>`：只替换 `2026-09` 分支、保留 1–8 月，注入 `dashboard_offline.html` + `version.json` + `var BUILD`。`merge_retained()` 会补回底板缺的历史月。
-  - `make_blocks()` 开头会跑 `G.verify_columns(EXCEL)` **列序自检**。
-- **解析库 `gen_v2_lib.py`**：`build_workorder/build_valueadded/build_valueparts/build_bigcare4/build_extend_time/build_cleaning`；`gen_month.py` 保留供 D（服务产品收入统计）/T（工程师）/W（周数据）。
-- **环境**：解析 Excel **必须用 venv python** `C:/Users/40973/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（系统 3.13.12 无 openpyxl）。Bash 里所有命令要带 PATH 前缀（PortableGit usr/bin + mingw64/bin），否则 `dirname`/`git` 都找不到。
-- **截止日铁律**：`截止日 = 更新日前一天`；服务周期 = 上月 28 日 → 当月 27 日（9 月 = 8.28–9.27，31 天，时间进度 = 已过天数 ÷ 31）。
-- **口径**：除 D/T 外全部按截止日过滤；**D/T 取「服务产品收入统计」报表全量（不过滤日期）**，故换 Excel 快照必变，`check` 对不上属正常。
+## 三、工具链与口径
+- `build_month.py check <cut>`（与底板对照）/ `build <cut>`（只换当月分支，保留历史月 + 注入 version.json/BUILD）。开头自动跑 `G.verify_columns()` 列序自检。
+- `gen_v2_lib.py`（Excel 解析：workorder/valueadded/valueparts/bigcare4/extend_time/cleaning）、`gen_month.py`（D/T/W）。
+- **环境**：必须用 venv python `C:/Users/40973/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（系统 python 无 openpyxl）。Bash 需带 PATH 前缀（PortableGit usr/bin + mingw64/bin）。
+- **截止日铁律**：截止日 = 更新日前一天；服务月 = 上月 28 日 → 当月 27 日（`service_month()`，**gen_v2_lib 与 gen_month 各一份，改一处必须同步**）。
+- 除 D/T 外全部按截止日过滤；**D/T 取「服务产品收入统计」全量快照**，换 Excel 必变，属正常。
+- 校验脚本：`scan_dates2.py`/`scan_head.py`（扫各表最大日期）、`verify_build.py`（历史月+功能回归）、`chk_w_off.py`（周数据归属）、`dump_head.py`（表结构诊断）、`_check_diff915.py`（语义比对，`prev` 必须指向 `_prev.html`）。
 
-### 🐞 列序坑（2026-09-18 踩，已修）
-平台导出**会调整列顺序**。本次「工单」表把 `办事处名称` 由 L→K、`工程师编号` 由 AE→AF，硬编码列号导致：办事处名读空、技师编码读成「已支付」、办事处数只剩 2 —— **数量有、归属全错且不报错**。
-- 已改为 **按表头名解析**：`gen_v2_lib._cols(ws, header_row, spec, tag)` + `WO_HEADERS`（工单表）/`ZG_HEADERS`（工单自购配件明细），找不到表头才回退旧常量并打印 `[warn]`。
-- 另有 `verify_columns(excel)` 核对 CSM配件/CSM服务项目/服务产品收入统计/WMS买断 的固定列号是否仍对得上表头名，每次 build 自动跑。
-- **后验手段**：把上一版 `dashboard_offline.html` 存成 `_prev*.html`，`build` 后用语义比对脚本（列表按递归多重集比，区分「仅顺序不同」与「真实差异」）验证历史截止日重算是否与上一版一致。
+### 口径坑（血泪清单）
+- **平台会挪列序**：工单/自购表已改按表头名解析（`_cols` + `WO_HEADERS`/`ZG_HEADERS`），其余靠 `verify_columns` 自检。判据：**报 3–8 条错位 = 挪列，可兜底；缺关键业务列（如配件名称）= 这张表导错了，必须重导**。
+- `工单自购配件明细` 无办事处列（col15 是大区部）；`CSM配件` col0 也是大区不是办事处 → 技师归属须反查。
+- W 块清洁耗材曾用 CSM配件 col0（大区）当办事处 → 假办事处「西北大区部」。已按表头定位 + 「必须以办事处结尾」兜底。
+- 明细表跨 Excel 行序不可复现，只校验「多重集一致」；`valueparts.code[]`、`bigcare.meta.剔除项` 是首现序，顺序变化属预期。
+- E 块必须由已过滤延保明细聚合；`EXTEND_TIME_DATA` 记录 `c` 恒为空串。
+- 百分比统一 `toFixed(2)`；KPI 环形字号 13；不改 CSS 宽度、`hsl()`、条形图 `Math.round`。
 
-### 其他口径坑
-- `工单自购配件明细` **没有办事处列**：col15 是「大区部」、col12 服务中心、col5 网点 → 技师归属必须用「技师编号→办事处」反查（源 `CSM配件` col2/col5/col6 或 `工单表` col30/col11）。`CSM配件` col0 也是「大区」不是办事处。
-- 明细表按源表行序，**跨 Excel 文件排列不可复现**，只校验「多重集一致」。
-- `valueadded.products[]` 有 `verify`，`valueparts.products[]` 没有；`valueparts` 配件名 `pname` 按源表首现序。
-- 大保养：`清洗保养总单`=销售分类(col16)；`剔除项`/`大保养项`=服务收费项目(col13)，三者独立可重叠；分母 = 总单 − 剔除。`MDATA_*_B.meta` 用常量序，`MONTHLY_FOUR.bigcare.meta` 用源表首现序。
-- `EXTEND_TIME_DATA` 记录 `c` 恒为空串、E 块 `techs[].id` = 姓名（E 必须由已过滤的延保明细聚合，`gen_extend` 不过滤日期不能用）；E 块逐年金额不四舍五入（保留浮点尾差），只有 `tamt` 舍入。
-- 合计行固定文案 `[合计]全区`/`[合计]全部网点`/`[合计]全部工程师`。
+## 四、当前状态（2026-10-21 16:10，BUILD **20261021-1608**，截止 **2026-10-20**）
+- Excel md5 `542f2213…`（07:51 导出，10.07MB）。四表口径统一到 10-20：工单 16,475 / CSM服务项目 5,160 / CSM配件 6,535 / 自购明细 3,608。
+- 自洽：工单表 `min=9-28 / max=10-20`，16,475 行全部落在服务月内 ✅
+- **2026-10 核心数**：工单 **16,475** / 止回阀 **1,009**（烟机安装 5,459、18.48%）/ 增值产品 1,659 / 增值配件当月 **1,824**（昨日 95、近7日 577）/ 大保养 **6÷717=0.84%**（总单 736）/ 延保 **126 条 ¥47,554.5**（y3 123 单、58 人）/ 清洗明细 **717** / D **¥402,654.5**（92 网点）/ T **220 人 ¥321,620.4**。
+- 周数据 4 周：38,088.60 / 48,054.30 / 43,496.00 / 10,368.60，归属零异常 ✅
+- 四端：Pages `327426b` ✅、旧 .link ✅、三副本 md5 `8908555d…` ✅、备份仓 `f73a531` 双推 ✅；家里 host 仍 `20261020-0935`（截止 10-19）。
 
-## 四、发布与显示规范
-- **CloudStudio 链接**：`https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link`（目录 `deploy_cs`），用 `workbuddy_sites_deploy`（旧名 `workbuddy_cloudstudio_deploy`）。
-  - ⚠️ **必须先问用户是否覆盖线上**（工具强约束：对已有线上链接的目录不会静默覆盖）。
-  - ⚠️ 返回「预留域名未绑定…本次发布已停止」= **假失败**（内容其实已发布，平台正从 `.link` 迁 `.host`）→ 直接 `curl <链接>/version.json` 看 `v`/`cut` 确认，别重试。
-  - ⚠️ 不要传 `updateExistingApp:true`（本工作区会报 no existing app to update）。
-- **显示规范**：所有百分比两位小数（`const pct = x => (x*100).toFixed(2) + '%'`，另需改同比/合计/品项分布/大保养/自购耗材/年度面板/技师面板的 `.toFixed(1)`）；**不要改** CSS 宽度、`hsl()`、条形图 `Math.round`。KPI 环形图文字用 `font-size="10.5"`。自检 `grep -n "toFixed(1)"` 只应剩条形图一处。
+### 本次新增认知（2026-10-21）
+- 🐞 **「网点买断」单据会被平台回溯撤回**：用 git 里的旧 Excel 逐行对比证明，CSM配件 窗口内 5,017 行**逐行完全一致**，但自购配件表少了 244 行（零新增、全是旧行消失，集中在 10-09~10-15），其中 35 行「网点买断」命中增值耗材 → valueparts 当月比上一版少 35 件。**不是代码 bug，是源数据撤回**；这类波动以后还会出现，历史月快照无法重算。
+- 🐞 周数据 `m2o`（网点→办事处）原只取自 CSM服务项目，少数网点在该表办事处字段为空/填成「XX服务中心」→ 归成「—」（本次 1 个网点 ¥99）。已加 **CSM配件 预建映射**兜底（`gen_month.gen_weekly`）。
 
-### ⚠️ 用户发来 dashboard(x).html 时必须先 diff，不能直接覆盖
-用户会把自己另存/改过的看板发回来，里面可能有**本地没有的新功能**。做法：把长行截断到 150 字符后用 `difflib.SequenceMatcher` 比对骨架，逐块看差异再决定。
-- 2026-09-27 那次用户版比本地多 14KB，含：①**「各品项占比环形图」模块**（`.iPieScope`/`#itemPie`/`#itemScopeSeg`/`PIE_COLORS`/`pieColorOf()`/`renderItemPie()`/`renderItemScopeSeg()`，可切全区/办事处、点击下钻）；②条形图改按品项配色；③技师面板 `pct` 改 `toFixed(2)`（我 9-15 漏改的）；④「锁定规则 2026-09-21」注释；⑤KPI 环形字号用 **13**（非 10.5，以用户版为准）。
-- 处理：把用户版同时覆盖 `dashboard_offline.html` 与 `dashboard_ref.html`（作新底板），再 build 新数据。
-
-### 语义比对脚本的已知局限
-`_check_diff915.py` 对「dict 列表」用**字符串**多重集比，浮点尾差（如 `6251.700000000001` vs `…002`）会被误报成真实差异；`bigcare.meta.剔除项/大保养项`、`valueparts.code[]` 是**源表首现序**，跨 Excel 顺序必变。这两种都属预期，别当 bug 查。
-
-## 四之二、家里电脑更新包（2026-10-05 起）
-- zip 条目名是 **GBK**，`unzip -l` 乱码 → 用 `zipfile` + `raw.encode('cp437').decode('gbk')` 解。
-- 包内：`run_update.py`（一键）+ `build_dashboard.py` + 11 个 `_gen_*`/`_reinject_*` + 4 个累积 json + `增值产品填写模板.xlsx` + `publish_gh/`。
-  - **那 4 个 json 是累积状态（1–9 月历史），漏拷会让年度累计数变小。**
-- 家里那套 `_gen_*.py` **不在**办公室工作区（这边是 `build_month.py`+`gen_v2_lib.py`+`gen_month.py`）——**两套独立实现，数据块结构兼容但代码不同**。
-- 新分享链接：`https://fangtai-service-dashboard.app.workbuddy.host`（旧 `0717bc4b...app.workbuddy.link` 已落后，待确认是否弃用）。
-- ✅ **2026-10-06 已把办公室 `build_month.py` 改成动态月份**（去掉 10 处 `2026-09` 硬编码 + 新增 `CURRENT_MONTH` 同步），现在与家里那套一样支持任意月。
-
-### 🐞 服务月周期坑（2026-10-06 修）
-旧代码 `end = svc + timedelta(days=30)` **只对 31 天服务月成立**：9 月 8/28+30=9/27 ✅，但 **10 月 9/28+30=10/28 ❌（应为 10/27，共 30 天）**。10 月是第一个 30 天服务月才暴露。
-- 已改为 `service_month(cutoff)`：**`gen_v2_lib.py` 与 `gen_month.py` 各有一份，改一处必须同步另一处**。
-- 规则：每月 28 日及以后归下一个服务月；终点=当月 27 日；跨年 12-28 → 次年 1 月服务月。
-- 连带修正：workorder / bigcare 的「截止日」用实际数据截止日（bigcare 用 `min(cut, end)`），不再错标成服务月末。
-
-## 五、当前状态（2026-10-16 09:10，BUILD **20261016-0905**，截止 **2026-10-15**）
-- 09:05 追加修复：**缓存穿透失效**导致手机一直显示 8 月旧页面。旧代码用 `sessionStorage` 计数（`if(n>=2) return`）防死循环，而
-  **微信/QQ 内置浏览器的 sessionStorage 长期不清除** → 次数耗尽后永久失效。已改为「按版本号去重」（`localStorage._cbTried`，
-  每个新版本自动重载一次）+ 红色提示条人工兜底。**改这段必须 4 份 HTML 含 `dashboard_ref.html` 一起改**，否则下次 build 被覆盖回旧实现。
-- Excel（md5 `33f66e17…`，08:40 导出，7.69MB）。**四张表口径统一到 10-15**：工单 12,651 行、CSM配件 5,017 行、CSM服务项目 4,035 行、工单自购配件明细 2,943 行。
-- **自洽校验**：工单表服务完成时间 `min=2026-09-28 / max=2026-10-15` → 12,651 行**全部落在服务月内** ✅
-- **2026-10 核心数字**：工单 **12,651** / 止回阀 **790**（烟机安装 4,224、占比 **18.70%**）/ 增值产品 1,263 / 增值配件当月 1,414（近7日 585）/ 大保养 **6÷528＝1.14%**（总单 543）/ 延保 **108 条 ¥41,242.2**（y3 106 单 ¥40,945.2、y1 2 单 ¥297、50 人）/ 清洗保养明细 **528 条** / D 报表全量 **¥312,912.92**（91 网点）/ T **214 人 ¥256,437.70**。
-- 周数据 3 周：38,088.60 / 48,054.30 / 28,406.30，归属零异常 ✅
-- 一致性验证（新 Excel 按 10-07 重算 vs 上一版）：B/W/E/workorder/valueadded/bigcare/EXTEND_TIME **全一致**，valueparts+CLEANING 仅行序；**只有 D/T 变**（报表全量快照，前 10 天 ¥17.29 万、后 8 天新增 ¥14 万，日均 1.73 万 vs 1.75 万，吻合，非口径问题）。
-- 四端：Pages commit `0d1eec0` ✅、旧 CloudStudio `.link` ✅（均 `20261016-0846`）、本地三副本 md5 `ba3fd48c…` 一致 ✅、备份仓 `5f04226` 双推 ✅。家里 host 现 `20261014-0931`（截止 10-13，落后，覆盖不了）。
-- ⚠️ **家里(`run_update.py`+`_gen_*.py`)与办公室(`build_month.py`+`gen_v2_lib.py`)是两套独立实现**，数据块兼容但会各自漂移；新链接 `fangtai-service-dashboard.app.workbuddy.host` 是家里机器建的，办公室覆盖不了。
-
-## 五·旧（2026-10-08，BUILD 20261008-0947，截止 10-07）
-- 工单 **6,572** / 止回阀 **384**（烟机安装 2,083、18.43%）/ 大保养 **2÷294＝0.68%**（总单 301）/ 延保 **54 条 ¥19,945.2** / 清洗 **294 条** / 增值产品 651 / 增值配件 730 / D **¥172,853.15**（85 网点）/ T **200 人 ¥128,373.1**。
-- 那次 `CSM服务项目` 刷新了（1,690→2,155 行，10-05→10-07），三块滞后问题消除。
-- 🐞 **修了周数据 W 的办事处列错位**：`gen_month.gen_weekly` 清洁耗材从 `CSM配件` 取 `col0`＝**大区**（办事处实为 col2）→ 假办事处「西北大区部」吸走清洁耗材约 ¥7,428（两周总额约 12%）。已按表头名定位 + 「必须以办事处结尾」兜底；修复后周合计金额不变，异常归属归零。**历史月 1–9 月 W 块仍带旧错误，无法重算。**
-- 新增脚本：`scan_dates2.py`/`scan_head.py`（扫最大日期，**部分表表头在第 2 行**）、`verify_build.py`（历史月+功能回归）、`chk_w_off.py`（周数据归属检查）、`dump_head.py`/`chk_pj.py`/`chk_pj2.py`（表结构与错表诊断）。
-
-### 🐞 更新流程的三个坑（2026-10-08 补）
-1. **对照基准**：`_check_diff915.py` 的 `prev` 必须是「上一版 build 出的同截止日版本」→ 先 `cp dashboard_offline.html _prev.html`，再 `check <旧截止日>`。**别指向 `dashboard_ref.html`**（底板截止日更早，必满屏 DIFFERS）。
-2. **改脚本后必须 `grep` 确认落盘**：用 python 字符串 replace 改脚本时，若只 print 硬编码文字会掩盖失败（本次踩到，白跑一轮）。
-3. **沙箱外 git 视图滞后**：`git status` 可能显示 `nothing to commit` 而实际 commit 已成功。判断以 `git rev-parse --short HEAD` / `git log` 为准。
-
-### 🐞 CURRENT_MONTH 正则坑（2026-10-06 修）
-页面里是 `let CURRENT_MONTH = "2026-10";`（第 818 行），build 脚本正则却写死 `var CURRENT_MONTH` → build 时打印 `[warn] 未找到 var CURRENT_MONTH 声明`，**跨月时页面默认月份不会更新**。已改正则为 `(?:var|let)\s+CURRENT_MONTH\s*=\s*"[^"]+";`。
+## 五、家里 vs 办公室两套实现
+- 家里：`run_update.py` + `_gen_*.py` + 4 个累积 json（**1–9 月历史状态，漏拷会让年度累计变小**）；办公室：`build_month.py` + `gen_v2_lib.py` + `gen_month.py`。数据块兼容但代码独立，会各自漂移。办公室已支持任意月份。

@@ -14,7 +14,7 @@ import gen_month as GM
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 底板 = 用户最新的参考看板（每次更新时用新收到的版本覆盖本文件）
 REF = os.path.join(HERE, "dashboard_ref.html")
-EXCEL = os.path.join(HERE, "2026年10月西北服务产品.xlsx")
+EXCEL = os.path.join(HERE, "2026年11月西北服务产品.xlsx")
 OUT = os.path.join(HERE, "dashboard_offline.html")
 
 # 需要「保留历史月」的多月份容器块
@@ -239,32 +239,78 @@ def check(cut):
 
 
 def merge_retained(html, prev):
-    """把上一版中存在、而新底版中缺失的历史月份块补回来，避免换底版时丢历史月。"""
+    """以「上一版构建(prev)」的数据为准合并进新底版(REF)的 HTML 骨架。
+
+    ⚠️ 为什么必须 prev 优先（2026-10-30 修）：
+    REF 是用户给的参考底板，常停在更早的截止日（如 REF 的 10 月只有 4,629 单/10-04，
+    而线上已是 16,475 单/10-20）。旧逻辑只「补缺月」——月份已存在就保留 REF 的，
+    于是在**跨月 build 新月份**时，上个月会被静默退回 REF 的旧快照（当月不再被替换）。
+    现在改为：prev 有的月份/块一律用 prev 覆盖，REF 只补 prev 没有的（防换底板丢历史月）。
+    """
     if not prev:
         return html, []
     kept = []
-    # 1) 多月份容器：补缺月
+    # 1) 多月份容器：prev 优先覆盖，REF 独有月份保留
     for var in MONTH_BLOCKS:
         cur = json.loads(extract(html, var))
         old = json.loads(extract(prev, var))
+        cm = cur.setdefault("months", {})
         for mk, mv in (old.get("months") or {}).items():
-            if mk not in (cur.get("months") or {}):
-                cur.setdefault("months", {})[mk] = mv
-                kept.append("%s.months[%s]" % (var, mk))
+            if mk not in cm:
+                cm[mk] = mv
+                kept.append("%s.months[%s]补缺" % (var, mk))
+            elif json.dumps(cm[mk], sort_keys=True) != json.dumps(mv, sort_keys=True):
+                cm[mk] = mv
+                kept.append("%s.months[%s]覆盖" % (var, mk))
+        cur["months"] = dict(sorted(cm.items()))
+        if var == "MONTHLY_FOUR" and old.get("year") is not None:
+            cur["year"] = old["year"]
         html = replace_value(html, var, cur)
-    # 2) 顶层 MDATA_YYYY_MM_* 声明：补缺块
+
+    # 2) 顶层 MDATA_YYYY_MM_*：prev 有一律用 prev 的值；prev 独有的补插
     cur_names = set(re.findall(r'(?m)^(?:const|let)\s+(MDATA_20\d\d_\d\d_[DTBWE])\s*=', html))
     for m in re.finditer(r'(?m)^(?:const|let)\s+(MDATA_20\d\d_\d\d_[DTBWE])\s*=\s*', prev):
         name = m.group(1)
-        if name in cur_names:
-            continue
         val = extract(prev, name)
-        anchor = re.search(r'(?m)^(?:const|let)\s+MDATA_20\d\d_\d\d_[DTBWE]\s*=', html)
-        if anchor:
-            html = html[:anchor.start()] + "const %s = %s;\n" % (name, val) + html[anchor.start():]
-            cur_names.add(name)
-            kept.append(name)
+        if name in cur_names:
+            if json.dumps(json.loads(extract(html, name)), sort_keys=True) == json.dumps(json.loads(val), sort_keys=True):
+                continue
+            html = replace_value(html, name, json.loads(val))
+            kept.append(name + "覆盖")
+        else:
+            anchor = re.search(r'(?m)^(?:const|let)\s+MDATA_20\d\d_\d\d_[DTBWE]\s*=', html)
+            if anchor:
+                html = html[:anchor.start()] + "const %s = %s;\n" % (name, val) + html[anchor.start():]
+                cur_names.add(name)
+                kept.append(name + "补缺")
     return html, kept
+
+
+def ensure_month_data(html, month):
+    """往 MONTH_DATA 映射里补一条新月份（下拉框选项与 applyMonth 取数都靠它）。"""
+    m = re.search(r'(?m)^(?:const|let)\s+MONTH_DATA\s*=\s*\{', html)
+    if not m:
+        return html, False
+    i = m.end() - 1                      # 指向 MONTH_DATA 的 '{'
+    depth, j = 0, i
+    while j < len(html):
+        c = html[j]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        j += 1
+    if j >= len(html):
+        return html, False
+    if '"%s"' % month in html[i:j + 1]:
+        return html, False
+    base = "MDATA_" + month.replace("-", "_")
+    entry = '  "%s": {D:%s_D, T:%s_T, B:%s_B, W:%s_W, E:%s_E}' % (month, base, base, base, base, base)
+    inner = html[i + 1:j].rstrip()
+    inner = (inner + ",\n" if inner.endswith("}") else inner + "\n") + entry + "\n"
+    return html[:i + 1] + inner + html[j:], True
 
 
 def build(cut):
@@ -283,7 +329,19 @@ def build(cut):
     for var, key in [("MDATA_%s_D" % TAG, "D"), ("MDATA_%s_T" % TAG, "T"),
                      ("MDATA_%s_B" % TAG, "B"), ("MDATA_%s_W" % TAG, "W"),
                      ("MDATA_%s_E" % TAG, "E")]:
-        html = replace_value(html, var, bl[key])
+        if re.search(r'(?m)^(?:const|let)\s+' + var + r'\s*=', html):
+            html = replace_value(html, var, bl[key])
+        else:
+            # 该月份第一次上线：新建数据块，插在首个 MDATA 声明之前（保证 MONTH_DATA 引用时已定义）
+            anchor = re.search(r'(?m)^(?:const|let)\s+MDATA_20\d\d_\d\d_[DTBWE]\s*=', html)
+            if not anchor:
+                raise SystemExit("找不到 MDATA 插入锚点，无法新增月份 " + MONTH)
+            line = "const %s = %s;\n" % (var, json.dumps(bl[key], ensure_ascii=False, separators=(",", ":")))
+            html = html[:anchor.start()] + line + html[anchor.start():]
+            print("[新增数据块] " + var)
+    html, md_new = ensure_month_data(html, MONTH)
+    if md_new:
+        print("[新增月份] MONTH_DATA[\"%s\"]（下拉框会自动多出该月）" % MONTH)
     # MONTHLY_FOUR：仅替换当月分支，保留其余月份与 year
     mf = json.loads(extract(html, "MONTHLY_FOUR"))
     mf["months"][MONTH] = bl["mf_month"]
