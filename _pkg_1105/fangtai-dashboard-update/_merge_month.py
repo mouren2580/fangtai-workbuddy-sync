@@ -62,7 +62,12 @@ yfix = {
     'workorder': ('工单表+CSM配件表(累计 %s)' % rng, rng, cut),
     'valueadded': (cut, "%s年" % y1, rng, ),
     'valueparts': (cut, rng),
+    # ⚠️ bigcare 的 meta 文案原先是 _gen_monthly_four 里写死的「2026-08-26 / 2025-12-28~2026-08-26」，
+    #    数值是活的、文案是死的（年度视图会显示「截止 08-26」）。2026-11-06 补上动态修正。
+    'bigcare': (cut, rng),
 }
+m = mf['year']['bigcare']['meta']
+m['截止日'] = yfix['bigcare'][0]; m['周期'] = yfix['bigcare'][1]
 m = mf['year']['workorder']['meta']
 m['来源'] = yfix['workorder'][0]; m['周期'] = yfix['workorder'][1]; m['截止'] = yfix['workorder'][2]
 m = mf['year']['valueadded']['meta']

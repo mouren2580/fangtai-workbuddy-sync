@@ -34,3 +34,9 @@ _gh_live.html
 _inspect_out.txt
 _verify_*.py
 _prev*.html
+
+# ===== 家里更新包内的自动备份 / 临时大产物（时间戳后缀，不入同步仓）=====
+_pkg_*/*/_bak_*
+_pkg_*/*/_pre_*
+_dom*.txt
+~$*.xlsx
