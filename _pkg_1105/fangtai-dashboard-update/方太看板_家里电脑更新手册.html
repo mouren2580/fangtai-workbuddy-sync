@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方太看板 · 家里电脑更新手册</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --card:#fff; --ink:#1a1f2b; --sub:#5b6675; --line:#e3e8ef;
+    --blue:#0b63ce; --blue-soft:#eef5ff; --orange:#e8590c; --orange-soft:#fff4e8;
+    --red:#d93025; --green:#0f9d58; --code:#f2f5f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    line-height:1.75;font-size:15px}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 70px}
+  header{background:linear-gradient(135deg,#0b63ce,#1e88e5);color:#fff;border-radius:14px;
+    padding:26px 28px;box-shadow:0 6px 22px rgba(11,99,206,.22)}
+  header h1{margin:0 0 6px;font-size:24px;letter-spacing:.5px}
+  header p{margin:0;opacity:.92;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;margin:16px 0;box-shadow:0 1px 3px rgba(16,24,40,.04)}
+  h2{font-size:18px;margin:30px 0 10px;padding-left:11px;border-left:4px solid var(--blue);line-height:1.3}
+  h3{font-size:15px;margin:18px 0 8px;color:var(--blue)}
+  p{margin:8px 0}
+  code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13px;
+    font-family:Consolas,Monaco,monospace;color:#0b3d91}
+  pre{background:#0f172a;color:#e6edf6;padding:14px 16px;border-radius:9px;overflow-x:auto;
+    font-size:13px;line-height:1.65;font-family:Consolas,Monaco,monospace}
+  pre .c{color:#7d8da6}
+  pre .k{color:#7ee787}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f7f9fc;font-weight:700;color:#33415c}
+  tbody tr:nth-child(even){background:#fbfcfe}
+  .tip{background:var(--blue-soft);border-left:4px solid var(--blue);padding:11px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:14px}
+  .warn{background:var(--orange-soft);border-left:4px solid var(--orange);padding:11px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:14px}
+  .ok{color:var(--green);font-weight:700}
+  .up{color:var(--red);font-weight:700}
+  .down{color:var(--green);font-weight:700}
+  ul,ol{margin:8px 0 8px 4px;padding-left:20px}
+  li{margin:5px 0}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:12px 0}
+  .num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:2px}
+  .files{font-family:Consolas,Monaco,monospace;font-size:12.5px;color:#33415c;background:var(--code);
+    padding:12px 14px;border-radius:8px;line-height:1.8;white-space:pre-wrap;word-break:break-all}
+  .muted{color:var(--sub);font-size:13px}
+  hr{border:none;border-top:1px dashed var(--line);margin:22px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>方太西北服务产品达成看板 · 家里电脑更新手册</h1>
+  <p>适用版本：2026-10（多月架构，含自检 / 一键脚本） · 更新日期 2026-10-05</p>
+</header>
+
+<div class="tip">
+  <b>一句话流程：</b>把当月月报 Excel 丢进文件夹 → 双击/运行 <code>run_update.py</code> 一条命令 → 自动更新看板并发布上线。
+</div>
+
+<h2>一、先搞清楚：这套东西分两块</h2>
+<table>
+  <thead><tr><th style="width:26%">用途</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>看板本体</b><br><code>dashboard.html</code></td>
+      <td>单文件网页，所有数据都写在里面（1–12 月全部月份）。<b>不要手工改它</b>，数据由脚本注入。</td>
+    </tr>
+    <tr>
+      <td><b>更新工具</b><br>一堆 <code>_*.py</code></td>
+      <td>从 Excel 读数据 → 算出各维度指标 → 注入看板 → 发布。每天/每次更新用的就是这套。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>二、第一次在新电脑上用（只做一次）</h2>
+
+<div class="step"><div class="num">1</div><div>
+  <b>把整个文件夹拷过来。</b>办公室电脑上的工作文件夹，<b>整体复制</b>到家里电脑任意位置。<br>
+  <span class="muted">要保证这些内容都在（缺一个都会跑不起来）：</span>
+  <div class="files">dashboard.html              ← 看板本体（最新）
+run_update.py               ← 一键更新脚本
+build_dashboard.py          ← 服务月/周期的公共算法库
+_gen_month.py  _gen_workorder.py  _gen_valueadded.py  _gen_valueparts.py
+_gen_bigcare.py  _gen_extend_time_months.py  _gen_cleaning.py  _gen_monthly_four.py
+_merge_month.py  _inject_month.py
+_reinject_monthlyfour.py  _reinject_extendtime.py  _reinject_cleaning.py
+_selfcheck_source.py  _bump_build.py  _gh_push.py
+_monthly_four.json  _extend_time.json  _cleaning_data.json  _valueparts_daily.json
+增值产品填写模板.xlsx        ← 产品目录模板（增值产品 / 增值配件明细要用）
+publish_gh\                 ← 发布目录（内含 index.html）
+方太看板_家里电脑更新手册.html  ← 本文档</div>
+  <div class="warn">⚠️ <b>那 4 个 json 一定要带</b>（<code>_monthly_four.json</code> 等）：它们是"累积状态"，里面存着 1–9 月的历史。漏了会导致年度累计数变小。<br>
+  另：这个包里已经全部装好了，正常不需要你手动挑文件——<b>整个文件夹原样使用即可</b>。</div>
+</div></div>
+
+<div class="step"><div class="num">2</div><div>
+  <b>装 Python。</b>到 python.org 下载 3.11 或更新版本，安装时<b>务必勾选 <code>Add python.exe to PATH</code></b>。<br>
+  装完后打开命令行（在本文件夹的地址栏输入 <code>cmd</code> 回车），执行：
+  <pre>pip install openpyxl</pre>
+  看到 <span class="ok">Successfully installed openpyxl-...</span> 就成。
+</div></div>
+
+<div class="step"><div class="num">3</div><div>
+  <b>准备发布令牌（只需一次）。</b>看板要推到 GitHub Pages 需要一把"钥匙"。<br>
+  登录 GitHub → 头像 → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b> → Generate new token (classic) → 勾选 <b>repo</b> → 生成后复制（形如 <code>ghp_xxxx</code>）。<br>
+  在本文件夹里<b>新建文件 <code>.gh_token</code></b>（注意前面那个点），用记事本把令牌<b>单独一行</b>粘进去保存，不要有空格空行。
+  <div class="warn">⚠️ 不要直接把办公室的 <code>.gh_token</code> 拷过来——那是办公室的钥匙，各建各的。</div>
+</div></div>
+
+<h2>三、以后每次更新（三步）</h2>
+
+<div class="step"><div class="num">1</div><div>
+  <b>把最新月报 Excel 放进这个文件夹</b>（如 <code>2026年10月西北服务产品.xlsx</code>）。<br>
+  <span class="muted">Excel 里必须有 7 张表：服务产品收入统计、CSM服务项目、CSM配件、WMS网点买断配件明细、工单自购配件明细、工单、服务技师。</span>
+</div></div>
+
+<div class="step"><div class="num">2</div><div>
+  <b>打开命令行。</b>在文件夹空白处 <b>Shift+右键</b> → "在此处打开 PowerShell 窗口"，或地址栏输入 <code>cmd</code> 回车。
+</div></div>
+
+<div class="step"><div class="num">3</div><div>
+  <b>跑这一条命令：</b>
+  <pre>python run_update.py --excel "2026年10月西北服务产品.xlsx" --cut 2026-10-04</pre>
+  <div class="tip">
+    <b><code>--cut</code> 怎么填：</b>统计截止日 = <b>你拿到这份 Excel 那天的前一天</b>（铁律）。<br>
+    比如今天 10/5 导出 → 写 <code>2026-10-04</code>；今天 10/12 导出 → 写 <code>2026-10-11</code>。
+  </div>
+  跑完约 20 秒，看到最后的 <span class="ok">完成</span> 汇总就成功了。<br>
+  只想<b>本地看效果、暂不上线</b>，加一个参数：
+  <pre>python run_update.py --excel "..." --cut 2026-10-04 <span class="k">--no-publish</span></pre>
+</div></div>
+
+<div class="tip">
+  <b>看效果：</b>双击本文件夹的 <code>dashboard.html</code> 就能看；线上地址 <code>https://mouren2580.github.io/fangtai-dashboard/</code>，按 <b>Ctrl+Shift+R</b> 硬刷新。
+</div>
+
+<h2>四、这条命令自动干了什么（8 步）</h2>
+<table>
+  <thead><tr><th style="width:6%">#</th><th style="width:30%">步骤</th><th>作用 / 你要关注的</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>环境检查</td><td>看 openpyxl 有没有装好。</td></tr>
+    <tr><td>2</td><td><b>源表自检</b></td><td>不依赖生成结果，直接从原始明细复算：<b>11 项检查</b>（周期覆盖 / 结构 / 三元勾稽 / 品项还原 / 止回阀 / 单调性）。<b>有疑点会直接停下</b>，先把报错告诉小Buddy。</td></tr>
+    <tr><td>3</td><td>自动备份</td><td>生成 <code>_bak_*_日期时间</code> 系列备份，跑坏了可以改回来。</td></tr>
+    <tr><td>4</td><td>生成 7 个维度</td><td>月度矩阵 / 工单防火阀 / 增值产品 / 增值配件明细 / 大保养 / 延保年限 / 清洗保养。</td></tr>
+    <tr><td>5</td><td>合并 + 注入</td><td>把当月数据并进 <code>_monthly_four.json</code> 并重算年度累计，再写进 <code>dashboard.html</code>。</td></tr>
+    <tr><td>6</td><td>校验</td><td>核对"统计截止日""默认打开月份""内联脚本语法"，任一项不过<b>不会发布</b>。</td></tr>
+    <tr><td>7</td><td>发布 GitHub Pages</td><td>刷新 BUILD 号 → 同步发布目录 → 推送。</td></tr>
+    <tr><td>8</td><td>汇总</td><td>打印工单数、网点数、防火阀占比、增值产品数、大保养占比，方便你当场核对。</td></tr>
+  </tbody>
+</table>
+
+<h2>五、生成算法与口径（核心）</h2>
+
+<h3>1. 服务月怎么算</h3>
+<p>不是自然月。规则：<b>每月 28 日及以后，算进下一个服务月</b>。</p>
+<table>
+  <thead><tr><th>服务月</th><th>实际日期区间</th><th>天数</th></tr></thead>
+  <tbody>
+    <tr><td>2026-08</td><td>7/28 – 8/27</td><td>31</td></tr>
+    <tr><td>2026-09</td><td>8/28 – 9/27</td><td>31</td></tr>
+    <tr><td>2026-10</td><td>9/28 – 10/27</td><td>30</td></tr>
+    <tr><td>2027-01（特例）</td><td>上一年 12/28 – 1/27</td><td>31</td></tr>
+  </tbody>
+</table>
+<p class="muted">所以导出 9/30 的数据时，它属于 <b>10 月服务月</b>，不是 9 月。<code>run_update.py</code> 会根据 <code>--cut</code> 自动判断，不用你操心。</p>
+
+<h3>2. 时间取哪一列（关键，容易搞错）</h3>
+<table>
+  <thead><tr><th>源表</th><th>按哪一列判断日期</th></tr></thead>
+  <tbody>
+    <tr><td>工单</td><td><b>服务完成时间</b>（不是创建时间！）</td></tr>
+    <tr><td>CSM服务项目</td><td>录入完成时间</td></tr>
+    <tr><td>CSM配件</td><td>录入完成时间</td></tr>
+    <tr><td>WMS网点买断配件明细</td><td>发货时间</td></tr>
+    <tr><td>工单自购配件明细</td><td>录入完成时间</td></tr>
+  </tbody>
+</table>
+<p class="muted">脚本按<b>表头名字</b>找列，所以源表列顺序变了也不怕。</p>
+
+<h3>3. 收入口径</h3>
+<ul>
+  <li>以 <b>服务产品收入统计</b> 主表的「合计」为准，共 <b>15 个品项</b>：清洗保养、延保服务、清洁耗材、止回阀、装饰罩、水/气路金属软管、排烟出风管、水气路通用辅材、其他产品线专用、其他水路辅材、其他气路辅材、橱柜类辅材、燃气管快速接头、工具、电路辅材。</li>
+  <li><b>网点买断原样计入</b>，不剔除"调整"行、不剔除虚拟网点/虚拟技师。</li>
+  <li><b>三元勾稽（自检核心）</b>：<br>
+    <code>CSM配件 + WMS网点买断 + CSM服务项目 ＝ 服务产品收入统计「合计」</code><br>
+    <span class="muted">每月自检都会验一次，差额必须是 <b>¥0.00</b>。</span></li>
+</ul>
+
+<h3>4. 几个专项口径</h3>
+<table>
+  <thead><tr><th style="width:24%">指标</th><th>口径</th></tr></thead>
+  <tbody>
+    <tr><td>防火阀占比</td><td>止回阀数量 ÷ 烟机安装量（工单表）</td></tr>
+    <tr><td><b>止回阀</b>（特殊）</td><td>CSM配件表：<b>销售分类=止回阀 且 上缴金额&gt;0</b> 的行计数（剔除金额 0/空/非数字）</td></tr>
+    <tr><td>清洗保养</td><td>CSM服务项目表筛「销售分类=清洗保养」，剔除 <b>保养超范围收费、灶具保养</b>；免费＝上缴 0，收费＝上缴&gt;0</td></tr>
+    <tr><td>大保养占比</td><td>大保养台数 ÷ 清洗保养总单数</td></tr>
+    <tr><td>延保服务</td><td>CSM服务项目表「销售分类=延保服务」。套餐只有 <b>1 年 / 2 年 / 3 年</b> 三档</td></tr>
+    <tr><td>增值产品</td><td><b>CSM配件表</b></td></tr>
+    <tr><td>增值配件明细</td><td><b>CSM配件表 + 工单自购配件明细</b></td></tr>
+  </tbody>
+</table>
+
+<h3>5. 同比（去年同月）</h3>
+<p>口径是 <b>去年同服务月整月</b>（如 2026-10 对 2025.9.28–10.27），取 <b>3+1</b> 四项：<b>清洗保养 / 延保服务 / 清洁耗材 / 止回阀</b>。</p>
+<div class="warn">
+  ⚠️ <b>这部分没法从 Excel 自动算出来</b>，需要人工提供：<b>6 个办事处 × 4 项金额</b>（新疆/宁夏/兰州/包头/呼和浩特/西宁）。<br>
+  每月月初小Buddy 会问你一次，拿到后写进看板的同比表。月初同比显示很低是正常的——"几天比一整月"，随数据累积会收敛。
+</div>
+
+<h3>6. 显示规则</h3>
+<ul>
+  <li><b>所有百分比保留两位小数</b>（如 18.39%，不写 18.4%）。</li>
+  <li>配色按国内惯例：<b><span class="up">涨＝红</span></b>、<b><span class="down">跌＝绿</span></b>。</li>
+  <li>角标"数据覆盖至 Y"＝<code>--cut</code> 你填的日期，脚本不会自己往后滚。</li>
+</ul>
+
+<h2>六、跑完怎么核对（30 秒）</h2>
+<ol>
+  <li>命令最后一段会打印 <b>工单数 / 网点数 / 工程师数 / 防火阀占比 / 增值产品数 / 大保养占比</b>——和自检结果对一下。</li>
+  <li>自检里那行 <b>三元勾稽差额</b> 必须是 <code>¥0.00</code>。</li>
+  <li>浏览器打开 <code>dashboard.html</code>，看顶部角标日期是不是你填的 <code>--cut</code>。</li>
+</ol>
+
+<h2>七、报错怎么办</h2>
+<table>
+  <thead><tr><th style="width:34%">现象</th><th>处理</th></tr></thead>
+  <tbody>
+    <tr><td><code>python 不是内部或外部命令</code></td><td>装 Python 时没勾 PATH，重装并勾选；或重启命令行。</td></tr>
+    <tr><td><code>No module named openpyxl</code></td><td>没装依赖：<code>pip install openpyxl</code>。</td></tr>
+    <tr><td><code>ModuleNotFoundError: build_dashboard</code></td><td><code>build_dashboard.py</code> 没跟着拷过来，补上即可。</td></tr>
+    <tr><td>自检出现 <b>[疑点]</b></td><td><b>先别继续</b>。把红色那段截图发给小Buddy 确认，多半是源表导出问题时。</td></tr>
+    <tr><td>校验提示"统计截止日没找到"</td><td>注入没成功，把完整输出发小Buddy。</td></tr>
+    <tr><td>发布报 <code>401 / 未提供令牌</code></td><td><code>.gh_token</code> 没建好或有空格；令牌要勾 <code>repo</code> 权限。</td></tr>
+    <tr><td>线上打开是旧数据</td><td><b>Ctrl+Shift+R</b> 硬刷新，或换无痕窗口。</td></tr>
+    <tr><td>家里打不开 github.io</td><td>家庭宽带访问 GitHub 不稳定，换手机热点试试。</td></tr>
+    <tr><td>想撤回这次更新</td><td>把 <code>_bak_dashboard_&lt;时间戳&gt;.html</code> 改名回 <code>dashboard.html</code>，再重跑命令发布。</td></tr>
+  </tbody>
+</table>
+
+<h2>八、两点务必知道</h2>
+<div class="warn">
+  <b>1. 家里只能更新 GitHub Pages。</b><br>
+  另一个分享链接 <code>https://fangtai-service-dashboard.app.workbuddy.host/</code> 是要在办公室的 WorkBuddy 里发布的，家里电脑没有这个工具。<br>
+  <b>处理办法：</b>家里更新完，回办公室跟我说一声"同步一下应用分享"，我补一次就行；或者家里干脆先用 <code>--no-publish</code> 只更新本地，回来一起发。
+</div>
+<div class="warn">
+  <b>2. 谁最后同步，线上就是谁的数据。</b><br>
+  家里和办公室是同一套逻辑、同一个仓库。如果两边都改过，以<b>最后一次推送</b>为准。建议同一时间只在一个地方更新。
+</div>
+
+<hr>
+<p class="muted">
+  本文档对应版本：2026-10-05 · 一键脚本 <code>run_update.py</code> · 源表 7 sheet · 与办公室管线一致。<br>
+  有拿不准的地方，直接把命令行输出截图发给小Buddy，别猜着改。
+</p>
+
+</div>
+</body>
+</html>

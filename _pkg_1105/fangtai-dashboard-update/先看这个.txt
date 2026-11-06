@@ -1,0 +1,27 @@
+方太西北服务产品看板 · 家里电脑更新包（20261105）
+
+【三步更新】
+  1) 装 Python 3.11+（安装时勾选 Add python.exe to PATH）
+     命令行执行一次：pip install openpyxl
+  2) 新建文件 .gh_token（注意前面那个点），把 GitHub 令牌单独一行粘进去
+  3) 把当天导出的月报 Excel 放进本文件夹，执行：
+     python run_update.py --excel "2026年XX月西北服务产品.xlsx" --cut YYYY-MM-DD
+
+     --cut = 你拿到这份 Excel 那天的【前一天】，例如 11/6 导出就写 2026-11-05
+     只想本地看效果、暂不上线：再加 --no-publish
+
+【这个包带的是什么】
+  - 最新看板 dashboard.html（月份下拉含 2026-01 ~ 2026-11，去年同比已锁死）
+  - 全部累积数据：5 个 _*.json + 每个月一个 _month_YYYY-MM.json（历史月份靠它们，一个都不能少）
+  - _frozen/：已锁死月份快照（2026-10 整月 + 2026-11 去年同月 3+1），跑更新时会自动还原，
+    保证已完成月份的任何一个数都不会被重算
+  - 数据源参考/：今天这份 Excel，只用于核对；真正更新请用当天新导出的表
+
+【注意】
+  - 本文件夹请整体使用，不要只挑几个文件拷；文件缺了会导致历史月份或年度数变小。
+  - 家里只能更新 GitHub Pages（mouren2580.github.io/fangtai-dashboard）。
+    另一个分享链接 fangtai-service-dashboard.app.workbuddy.host 需要在办公室的 WorkBuddy 里发布，
+    家里更新完回办公室说一声补一次即可。
+  - 跑完请核对输出版块里的「三元勾稽差额」，必须是 ¥0.00。
+
+【详细说明】方太看板_家里电脑更新手册.html（双击用浏览器打开）
