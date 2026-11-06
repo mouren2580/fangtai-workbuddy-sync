@@ -112,7 +112,48 @@ curl -s "https://0717bc4b30824b8d8a407555473b321e.app.workbuddy.link/version.jso
 ```
 两边 `v` 应等于新 BUILD；必要时再抓页面印证具体改动（如 `grep -o "const pct = x => (x\*100)\.toFixed(2)"`）。GitHub Pages 构建需 1–3 分钟，刚推完立刻查可能是旧版。
 
-# 相关：新 Excel 数据更新流程（数据类改动走这条）
+# 主流程（2026-11-06 起）：接入「家里电脑更新包」
+
+用户会把家里那台机器打好的 `方太看板_家里电脑更新包_YYYYMMDD.zip` 发过来，说「先把看板更新下」。家里那套 `run_update.py` 套件比办公室的 `build_month.py` 更完整（锁死月 `_frozen`、单均收入 `UNIT_REVENUE_DATA`、活的年度累计、去年同期），**以它为准**。
+
+```bash
+# 1) 解压
+rm -rf _pkg_XXXX && mkdir _pkg_XXXX
+"$PY" -c "import zipfile;zipfile.ZipFile(r'<zip路径>').extractall(r'D:/WorkBuddy/_pkg_XXXX')"
+
+# 2) 先读三个文件（判断包里截止日 / 锁死了哪些月）
+cat _pkg_XXXX/fangtai-dashboard-update/先看这个.txt
+cat _pkg_XXXX/fangtai-dashboard-update/_frozen/*/meta.json
+cat _pkg_XXXX/fangtai-dashboard-update/publish_gh/version.json
+
+# 3) 扫包内数据源各表最大日期（表头行位置不统一，用自动定位）
+#    确认 cut = 实际最大日期（不是"更新日-1"）
+
+# 4) 在包目录重跑一遍（不发布），验证办公室环境能复现
+cd _pkg_XXXX/fangtai-dashboard-update
+"$PY" run_update.py --excel "数据源参考/2026年X月西北服务产品.xlsx" --cut YYYY-MM-DD --no-publish
+#    通过标志：源表自检✔ / 8 个生成步骤✔ / 锁死月 --verify ✔ / 默认月✔
+
+# 5) 逐块比对重算结果与包内原始 dashboard.html（应只有时间戳/首现序差异）
+"$PY" D:/WorkBuddy/_cmp_blocks.py _bak_dashboard_*.html dashboard.html
+
+# 6) 接进工作区：换缓存穿透段 + 改 BUILD + 写 3 副本 + version.json
+#    改 _adopt_home_dashboard.py 里的 NEW_BUILD / CUT 后执行
+"$PY" D:/WorkBuddy/_adopt_home_dashboard.py
+```
+
+**🐞 第 6 步不能省，也不能偷懒直接 `cp`**：家里 `dashboard.html` 的缓存穿透还是旧的 `sessionStorage._cbN` 计数版，直接发布会让 2026-10-16 修好的「微信里手机永远停在旧月份」复发。必须把 `/*__CACHEBUST_START__*/ … /*__CACHEBUST_END__*/` 整段换成工作区修复版（`_adopt_home_dashboard.py` 已内置），`var BUILD` 只能出现一次。
+
+**校验（每次必做）**：
+- `node --check` 全部内联 script（4 块）+ 缓存穿透段单独检查。
+- **无头渲染**：`msedge --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=10000 --dump-dom "file:///D:/WorkBuddy/dashboard_offline.html" > _dom.html`，核对 KPI 卡数量（2026-11 版为 **30 张**）、`monthBadge`、`weekBadge`、达成率。
+  DOM 里的 `NaN` / `undefined` 绝大多数来自内置 SheetJS（`isNaN(a)`、`typeof module!=="undefined"`），**不是数据问题**，别误判。
+- 数据侧核对：`_chk_new.py` 打印 9/10/11 月关键指标 + 年度累计 + 去年同期。
+
+**发布**：三副本 + `version.json`（`{"v":BUILD,"cut":"YYYY-MM-DD","t":...}`）→ `push_gh_pages.py` → `deploy_cs` 部署 → 备份仓双推 → 两链 `curl version.json` 验版。
+**收尾**：`dashboard_ref.html` 同步成新结构（否则以后跑 `build_month.py` 会丢掉单均收入模块）；`_pkg_*` 目录留着别删（含累积 json 与锁死月）。
+
+# 相关（旧）：新 Excel 数据更新流程（`build_month.py`，2026-11-06 起降级为备用）
 **截止日铁律**：**截止日 = 更新日前一天**（如 10-06 更新 → 2026-10-05）。
 **服务周期**：上月 28 日 → 当月 27 日。⚠️ **天数不固定**：9 月 8.28–9.27 = 31 天，但 **10 月 9.28–10.27 = 30 天**（取决于上月的天数）。
 → 已统一为 `service_month(cutoff)`（`gen_v2_lib.py` 与 `gen_month.py` **各一份，改一处必须同步另一处**），规则「每月 28 日及以后归下一个服务月；终点 = 当月 27 日；跨年 12-28 → 次年 1 月服务月」。
