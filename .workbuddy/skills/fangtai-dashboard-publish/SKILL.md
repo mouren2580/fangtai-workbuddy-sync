@@ -144,9 +144,21 @@ cd _pkg_XXXX/fangtai-dashboard-update
 
 **🐞 第 6 步不能省，也不能偷懒直接 `cp`**：家里 `dashboard.html` 的缓存穿透还是旧的 `sessionStorage._cbN` 计数版，直接发布会让 2026-10-16 修好的「微信里手机永远停在旧月份」复发。必须把 `/*__CACHEBUST_START__*/ … /*__CACHEBUST_END__*/` 整段换成工作区修复版（`_adopt_home_dashboard.py` 已内置），`var BUILD` 只能出现一次。
 
+### 日常增量（2026-11-06 验证：用户只发 Excel、不发包也能跑）
+家里包解压后留在 `_pkg_1105/fangtai-dashboard-update/`，**累积 json 与 `_frozen/` 都在里面**，所以之后用户只说「请更新下数据」+ 甩一个 xlsx 时，不用再求包：
+```bash
+cd /d/WorkBuddy/_pkg_1105/fangtai-dashboard-update
+"$PY" run_update.py --excel "D:/WorkBuddy/2026年11月西北服务产品.xlsx" --cut <拿到表那天-1> --no-publish
+# 再回工作区接入（参数：BUILD 用 `date +%Y%m%d-%H%M`，CUT 用截止日）
+cd /d/WorkBuddy && "$PY" _adopt_home_dashboard.py "$(date +%Y%m%d-%H%M)" 2026-11-05
+```
+- 跑之前先确认 Excel 完整：五张明细表（工单/CSM服务项目/CSM配件/WMS网点买断/工单自购）行数应随天数线性增长；某张表明显偏少就是导出残缺，要求重导。`_selfcheck_source.py` 已含周期越界与三元勾稽检查，全过再往下走。
+- **增量构建的正确预期**：`_cmp_blocks.py` 比上一版，只有 **9 块**该变（`MDATA_<当月>_{D,T,B,W,E}` + `MONTHLY_FOUR` + `CLEANING_DATA` + `EXTEND_TIME_DATA` + `UNIT_REVENUE_DATA`）；**任何历史月块有差异都是 bug**。
+- 🐞 `_merge_month.py` 曾漏改 `year.bigcare.meta` 的「截止日/周期」文案（workorder/va/vp 都改了，只有 bc 沿用 `_gen_monthly_four.py` 写死的 `2026-08-26`）。已补 `yfix['bigcare']`；若拿到旧脚本，更新后需补跑 `_merge_month.py --month <月>` + `_reinject_monthlyfour.py`（幂等，year 数值不变）。
+
 **校验（每次必做）**：
 - `node --check` 全部内联 script（4 块）+ 缓存穿透段单独检查。
-- **无头渲染**：`msedge --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=10000 --dump-dom "file:///D:/WorkBuddy/dashboard_offline.html" > _dom.html`，核对 KPI 卡数量（2026-11 版为 **30 张**）、`monthBadge`、`weekBadge`、达成率。
+- **无头渲染**：`msedge --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=10000 --dump-dom "file:///D:/WorkBuddy/dashboard_offline.html" > _dom.html`，核对 KPI 卡数量（2026-11 版为 **31 张**，`<div class="kpi"` 计数）、`monthBadge`、`weekBadge`、达成率。
   DOM 里的 `NaN` / `undefined` 绝大多数来自内置 SheetJS（`isNaN(a)`、`typeof module!=="undefined"`），**不是数据问题**，别误判。
 - 数据侧核对：`_chk_new.py` 打印 9/10/11 月关键指标 + 年度累计 + 去年同期。
 
